@@ -67,6 +67,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # `npm publish --provenance` signs the tarball with an OIDC token from the runner, and minting
+      # that token needs this. Without it npm fails before uploading anything.
+      id-token: write
 
     steps:
       - name: Checkout repository
