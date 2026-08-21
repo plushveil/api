@@ -26,18 +26,20 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           # The repository pins its runtime; 'latest' would test something nobody develops against.
           node-version-file: .nvmrc
 
+      # `npm ci` installs exactly the lockfile. `npm install` would resolve the ranges afresh, which
+      # is how a newer linter than anyone has locally ends up failing a build.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Run tests
         run: npm test
@@ -61,12 +63,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node.js for npm
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           registry-url: 'https://registry.npmjs.org'
@@ -74,7 +76,7 @@ jobs:
       # `npm publish` runs `prepack`, which builds. The compiler is a development dependency, so it
       # has to be installed for that to work.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci
 
       - name: Set package version from tag
         run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
@@ -87,7 +89,7 @@ jobs:
       # A second registry needs its own `.npmrc`, which `setup-node` rewrites. Without this the
       # second publish would target npm again and fail with a 409.
       - name: Set up Node.js for GitHub Packages
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           registry-url: 'https://npm.pkg.github.com'
@@ -107,7 +109,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag || github.ref }}
 

@@ -46,6 +46,20 @@ Three jobs, with the two publishing jobs gated on the first:
 The image name is derived from `GITHUB_REPOSITORY`, so a fork or a rename cannot publish into
 someone else's package.
 
+### Reproducible installs
+
+`package-lock.json` is committed and CI uses `npm ci`, not `npm install`.
+
+This is not housekeeping. The tool versions are ranges, so `npm install` resolves them afresh on
+every run: a build once failed on a lint rule that a newer `oxlint` had begun enforcing by default,
+which nobody could reproduce locally because their `node_modules` held the older one. `npm ci`
+installs exactly the lockfile, so CI lints with the same version a contributor does.
+
+Two habits follow from it:
+
+- Update the lockfile in the same commit as any `package.json` dependency change.
+- Where a lint rule matters, name it in `oxlint.config.ts` rather than relying on a version's defaults, so the intent survives an upgrade either way.
+
 ### Secrets
 
 | Secret         | Used for                                             |

@@ -12,7 +12,7 @@ export interface LoadRoutesOptions {
    */
   basePath?: string
   /**
-   * Skip these. `**​/` matches zero or more leading directories.
+   * Skip these. A leading double-star segment matches zero or more directories.
    */
   ignore?: string[]
   /**
@@ -24,14 +24,14 @@ export interface LoadRoutesOptions {
 const DEFAULT_IGNORE = ['**/*.test.ts', '**/_*.ts']
 
 /**
- * Turns one glob into a matcher. Only the subset the documented defaults need: `**​/` for
- * zero-or-more directories, `*` for anything but a slash.
+ * Turns one glob into a matcher. Only the subset the documented defaults need: a leading
+ * double-star segment for zero or more directories, and `*` for anything but a slash.
  */
 function toMatcher(pattern: string): (relative: string) => boolean {
   const source = pattern
     .split('**/')
     .map((part) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*'))
-    // `**​/` must also match zero directories, so `**​/_*.ts` catches a root-level `_x.ts`.
+    // `**/` must also match zero directories, so `**/_*.ts` catches a root-level `_x.ts`.
     .join('(?:.*/)?')
   const re = new RegExp(`^${source}$`)
   return (relative) => re.test(relative)

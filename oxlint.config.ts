@@ -44,6 +44,11 @@ export default defineConfig({
     'prefer-const': 'error',
     'no-undef': 'error',
 
+    // Invisible characters. Stated explicitly rather than left to the version's defaults: this
+    // fired in CI and not locally, because a floating oxlint range resolved to a newer linter than
+    // the one installed. The lockfile fixes the drift; this makes the intent independent of it.
+    'no-irregular-whitespace': 'error',
+
     // Comparison & Logic
     eqeqeq: 'error',
     'no-constant-condition': 'error',
