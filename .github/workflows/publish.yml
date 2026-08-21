@@ -3,7 +3,20 @@ name: CD
 on:
   push:
     tags:
-      - '*'
+      - 'v*'
+  # `release.sh` dispatches this workflow after moving a tag. A tag that is force-moved to a new
+  # commit does not always emit a push event, so the dispatch is what makes a re-release publish.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (for example, v1.2.3)'
+        required: true
+        type: string
+
+# `github.ref_name` is the tag for a push and the branch for a dispatch, so neither is usable on its
+# own. Everything below reads this instead.
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build:
@@ -14,14 +27,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'latest'
+          # The repository pins its runtime; 'latest' would test something nobody develops against.
+          node-version-file: .nvmrc
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Run tests
         run: npm test
@@ -36,64 +52,105 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
-      - name: Set up Node.js
+      - name: Set up Node.js for npm
         uses: actions/setup-node@v4
         with:
-          node-version: 'latest'
+          node-version-file: .nvmrc
+          registry-url: 'https://registry.npmjs.org'
 
-      - name: Build package artifacts
-        run: |
-          npm ci --include=dev
-          npm run build
-
+      # There is no build step: the package ships TypeScript sources and `tsconfig.json` sets
+      # `noEmit`. See docs/RELEASE.md for what that means for consumers.
       - name: Set package version from tag
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npm version "$VERSION" --no-git-tag-version
+        run: npm version "${RELEASE_TAG#v}" --no-git-tag-version --allow-same-version
 
-      - name: Publish package to npm
-        run: npm publish --access public
+      - name: Publish to npm
+        run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish package to GitHub Package Registry
+      # A second registry needs its own `.npmrc`, which `setup-node` rewrites. Without this the
+      # second publish would target npm again and fail with a 409.
+      - name: Set up Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@plushveil'
+
+      - name: Publish to GitHub Packages
         run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-ghcr:
+  publish-image:
     needs: build
     runs-on: ubuntu-latest
-
     permissions:
       contents: read
       packages: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3.7.1
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v7
-        with:
-          context: '{{defaultContext}}:.'
-          file: Dockerfile
-          push: true
-          tags: ghcr.io/plushveil/pages:${{ github.ref_name }}
+      # Derived from the repository name, so a fork or a rename cannot publish to the wrong package.
+      - name: Derive image tags
+        id: tags
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
+          VERSION="${RELEASE_TAG#v}"
+          {
+            echo "tags=${IMAGE}:${VERSION},${IMAGE}:${RELEASE_TAG},${IMAGE}:latest"
+            echo "image=${IMAGE}"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Logout from GHCR
-        run: docker logout ghcr.io
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          # QEMU above exists for this. Without an explicit list the build is amd64 only.
+          platforms: linux/amd64,linux/arm64
+          provenance: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.RELEASE_TAG }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # Publishing an image that cannot serve a request is worse than not publishing one, so the
+      # pushed image is pulled back and exercised against the repository's own fixture.
+      - name: Verify the pushed image serves a mounted folder
+        run: |
+          IMAGE="${{ steps.tags.outputs.image }}:${RELEASE_TAG}"
+          docker run -d --name verify -p 3000:3000 \
+            -v "$PWD/test/fixtures/api-health/api:/api:ro" "$IMAGE"
+
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+
+          curl -fsS http://127.0.0.1:3000/health | tee /dev/stderr | grep -q '"status":"ok"'
+          docker rm -f verify

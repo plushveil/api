@@ -4,13 +4,16 @@
 
 Two commands, one per direction:
 
-| Command        | Direction                                |
+Two commands move between the two representations, and a third runs one of them:
+
+| Command        | Purpose                                  |
 | -------------- | ---------------------------------------- |
 | `api-port`     | `api/` → `openapi.json` + `api.types.ts` |
 | `api-backport` | `openapi.json` → `api/` + `api.types.ts` |
+| `api-server`   | Serve an `api/` folder over HTTP         |
 
-Both share the same spec model, so the round trip is stable in either order. Both read
-`api.config.ts` when present.
+The two porting commands share the same spec model, so the round trip is stable in either order.
+All three read `api.config.ts` when present.
 
 ---
 
@@ -77,7 +80,7 @@ api-port ./api --title 'Users API' --api-version 1.0.0
             "name": "include",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "enum": ["profile", "orders"] }
+            "schema": { "type": "string", "enum": ["orders", "profile"] }
           },
           {
             "name": "x-request-id",
@@ -105,19 +108,6 @@ api-port ./api --title 'Users API' --api-version 1.0.0
   },
   "components": {
     "schemas": {
-      "User": {
-        "type": "object",
-        "description": "A registered user.",
-        "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "email": { "type": "string", "format": "email" },
-          "name": { "type": "string" },
-          "createdAt": { "type": "string", "format": "date-time" },
-          "role": { "type": "string", "enum": ["admin", "member"] }
-        },
-        "required": ["id", "email", "name", "createdAt", "role"],
-        "additionalProperties": false
-      },
       "ApiError": {
         "type": "object",
         "description": "A failed request.",
@@ -127,14 +117,31 @@ api-port ./api --title 'Users API' --api-version 1.0.0
         },
         "required": ["code", "message"],
         "additionalProperties": false
+      },
+      "User": {
+        "type": "object",
+        "description": "A registered user.",
+        "properties": {
+          "createdAt": { "type": "string", "format": "date-time" },
+          "email": { "type": "string", "format": "email" },
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "member"] }
+        },
+        "required": ["createdAt", "email", "id", "name", "role"],
+        "additionalProperties": false
       }
     }
   }
 }
 ```
 
-Paths, parameters, properties, and component names are emitted in a stable order, so the
-output is diffable.
+Every collection above is in the canonical order defined in
+[Ordering](./TYPE_MAPPING.md#ordering), which is what makes the output diffable and `--check`
+meaningful.
+
+This block is authoritative for **ordering and content, not whitespace**. Line breaking is an
+implementation detail of the writer; do not assert these exact bytes.
 
 ### `--check`
 
@@ -190,10 +197,20 @@ resolved and inlined.
 implementations survive. It is why route modules should stay thin — see
 [API_FOLDER.md](./API_FOLDER.md).
 
+`keep` requires `--force`, because it rewrites a file that already exists. Where the target does
+not exist there is no body to keep, so it falls back to `throw`. `keep` needs to locate the
+`export interface Operation` declaration; if a route module has been reshaped so that it cannot
+be found unambiguously, the file is left untouched and reported, and the run exits `1` — no
+`--force` can make an unparseable module safe to rewrite.
+
 ### Overwriting
 
-Without `--force`, an existing route file is left alone and reported. With `--force`, it is
-rewritten, which discards handler bodies unless `--handlers keep`.
+Without `--force`, an existing route file is left alone and reported, the files that did not
+exist are still written, and the run exits `4`. With `--force`, existing files are rewritten,
+which discards handler bodies unless `--handlers keep`.
+
+`api.types.ts` and `api/schemas.ts` are generated artefacts rather than route modules: they are
+always rewritten and are never subject to `--force`.
 
 Naming is deterministic: `/users/{userId}` with `get` is always `api/users/[userId]/get.ts`. A
 path segment that is not a valid directory name is percent-decoded and, if still unusable, is
@@ -218,9 +235,76 @@ The generated `api.types.ts` is documented in [CLIENT.md](./CLIENT.md).
 
 ---
 
+---
+
+## `api-server`
+
+Loads an `api/` folder and serves it.
+
+```bash
+api-server [options] [<dir>]
+```
+
+`<dir>` is the `api/` folder, defaulting to `./api`.
+
+### Options
+
+| Option                | Default           | Description                                          |
+| --------------------- | ----------------- | ---------------------------------------------------- |
+| `-p, --port <number>` | `3000`            | Port to listen on. Falls back to `$PORT`, then 3000. |
+| `--host <host>`       | `127.0.0.1`       | Interface to bind. Falls back to `$HOST`.            |
+| `--spec <file>`       | `out` from config | Specification to validate requests against.          |
+| `--validate`          |                   | Validate requests against the specification.         |
+| `--base-path <path>`  |                   | Prefix stripped before matching.                     |
+| `--silent`            |                   | Suppress the startup banner and warnings.            |
+| `-c, --config <file>` | `./api.config.ts` | Configuration file.                                  |
+| `-h, --help`          |                   |                                                      |
+| `-v, --version`       |                   |                                                      |
+
+`--port 0` binds an ephemeral port, which the startup line then reports — useful in tests and
+wherever the port is assigned rather than chosen.
+
+Validation is opt-in and needs a specification, because an `Operation` type does not survive to
+runtime. `--validate` without `--spec` and without an `out` in the configuration is a usage error
+rather than a silently unvalidated server.
+
+### Example
+
+```bash
+api-server ./api --port 8080 --spec ./openapi.json --validate
+```
+
+```text
+Serving ./api on http://127.0.0.1:8080
+  GET     /health
+```
+
+The banner and the route list go to stderr, so stdout stays clean.
+
+`SIGINT` and `SIGTERM` stop the server, waiting for in-flight requests before the process exits. The
+handlers are installed before the port is bound, so a supervisor that starts the server and signals
+it immediately still gets a clean shutdown.
+
+The folder is scanned before anything binds. A path that does not exist, and a path that holds no
+route modules, both exit `1` — a server that accepts connections while answering nothing hides a
+misconfiguration rather than reporting it.
+
+### Container image
+
+The same command is published as an image, which carries the package and no application code:
+
+```bash
+docker run --rm -p 3000:3000 -v "$PWD/api:/api:ro" ghcr.io/plushveil/api
+```
+
+Mount the folder to serve at `/api`. `PORT` and `HOST` are read from the environment, and the
+container binds `0.0.0.0` so the published port is reachable. See [RELEASE.md](../RELEASE.md).
+
+---
+
 ## Configuration
 
-Both commands read `./api.config.ts` unless `--config` says otherwise. Command line options
+All three commands read `./api.config.ts` unless `--config` says otherwise. Command line options
 win over the file.
 
 ```ts
@@ -252,12 +336,19 @@ reference these names with `@security`, as described in [TYPE_MAPPING.md](./TYPE
 
 ## Exit Codes
 
-| Code | Meaning                                                              |
-| ---- | -------------------------------------------------------------------- |
-| `0`  | Success.                                                             |
-| `1`  | An unsupported type, an invalid spec, or an unreadable route module. |
-| `2`  | Bad usage — an unknown option or a missing argument.                 |
-| `3`  | `--check` found a difference.                                        |
-| `4`  | Refused to overwrite existing files; pass `--force`.                 |
+| Code | Meaning                                                                                                                      |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `0`  | Success.                                                                                                                     |
+| `1`  | An unsupported type, an invalid spec, an unreadable route module, or a requested feature that this build does not implement. |
+| `2`  | Bad usage — an unknown option, a missing argument, an invalid flag value, or two flags that contradict each other.           |
+| `3`  | `--check` found a difference.                                                                                                |
+| `4`  | Refused to overwrite existing route files; pass `--force`.                                                                   |
 
 Warnings go to stderr and do not change the exit code.
+
+`api-server` uses `0`, `1`, and `2` only; `3` and `4` belong to the porting commands.
+
+A flag that is documented here but not yet implemented still parses and validates — it is never
+reported as an unknown option, because that would be an exit-`2` lie. It fails with exit `1` and
+a message naming the flag. Everything documented in this file is expected to work eventually;
+consult `--help` for what the build in front of you actually supports.

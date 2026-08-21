@@ -37,6 +37,10 @@ The folder root maps to `/`. A file at `api/get.ts` is `get /`.
 The filename is the HTTP method in lowercase: `get.ts`, `post.ts`, `put.ts`, `patch.ts`,
 `delete.ts`, `head.ts`, `options.ts`, `trace.ts`.
 
+`trace.ts` ports to a `trace` operation and is served like any other method, but
+[the client](./CLIENT.md) has no `trace` method: `TRACE` is a forbidden method in the Fetch
+standard, so a client built on `fetch` cannot issue one.
+
 These filenames are reserved and are never treated as methods:
 
 | Filename        | Purpose                                                                           |
@@ -168,27 +172,31 @@ A **named** type used by an operation becomes an entry in `components/schemas`, 
 ```ts
 // api/schemas.ts
 
-/** A registered user. */
-export interface User {
-  /** @format uuid */
-  id: string
-  /** @format email */
-  email: string
-  name: string
-  /** @format date-time */
-  createdAt: string
-  role: 'admin' | 'member'
-}
-
 /** A failed request. */
 export interface ApiError {
   code: string
   message: string
 }
+
+/** A registered user. */
+export interface User {
+  /** @format date-time */
+  createdAt: string
+  /** @format email */
+  email: string
+  /** @format uuid */
+  id: string
+  name: string
+  role: 'admin' | 'member'
+}
 ```
 
 The component name is the type's declared name. Two different types with the same name in
 different files is an error — rename one, or the round trip cannot be reversed.
+
+Declarations and properties are in alphabetical order because that is the order both CLIs
+emit — see [Ordering](./TYPE_MAPPING.md#ordering). Writing them in another order is fine; the
+next `api-backport` will simply rewrite the file in sorted order.
 
 `api-backport` writes every `components/schemas` entry to `api/schemas.ts` and imports from
 there. Placing shared types anywhere else works when porting, but the backport will not

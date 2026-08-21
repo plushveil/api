@@ -10,23 +10,24 @@ Write route files in an `api/` folder and generate `openapi.json` from them. Or 
 The package has **no runtime dependencies**. It uses `node:http`, `node:fs`, `node:util`, and
 the global `fetch`.
 
-## The Four Surfaces
+## The Surfaces
 
 | Surface      | Import / command        | Purpose                                                        | Reference                             |
 | ------------ | ----------------------- | -------------------------------------------------------------- | ------------------------------------- |
 | Server       | `@plushveil/api/server` | Starts an HTTP server, exposes a router, registers middleware. | [SERVER.md](./CONTRIBUTING/SERVER.md) |
 | Port CLI     | `api-port`              | Generates `openapi.json` from an `api/` folder.                | [CLI.md](./CONTRIBUTING/CLI.md)       |
 | Backport CLI | `api-backport`          | Generates an `api/` folder from an `openapi.json`.             | [CLI.md](./CONTRIBUTING/CLI.md)       |
+| Server CLI   | `api-server`            | Serves an `api/` folder over HTTP.                             | [CLI.md](./CONTRIBUTING/CLI.md)       |
 | Client       | `@plushveil/api/client` | Consumes `api.types.ts` to call any API with full type safety. | [CLIENT.md](./CONTRIBUTING/CLIENT.md) |
 
 ```text
-        api/  (TypeScript route modules)
-          │                            ▲
+          api/  (TypeScript route modules)
+           │                            ▲
   api-port │                            │ api-backport
-          ▼                            │
-     openapi.json ────────────────────┘
-          │
-          └─ api.types.ts ──▶ @plushveil/api/client
+           ▼                            │
+       openapi.json ────────────────────┘
+           │
+           └─ api.types.ts ──▶ @plushveil/api/client
 ```
 
 ## Installation
@@ -49,7 +50,13 @@ This writes one file per operation (`api/users/[userId]/get.ts`), the shared sch
 (`api/schemas.ts`), and `api.types.ts`. Every generated handler throws `501 Not Implemented`
 until you fill it in.
 
-Then serve it:
+Then serve it, either from the command line:
+
+```bash
+npx api-server ./api --port 3000 --spec ./openapi.json --validate
+```
+
+or from your own process, which is the same code with your wiring around it:
 
 ```ts
 import { createServer } from '@plushveil/api/server'
@@ -104,8 +111,9 @@ if (result.status === 200) {
 ## Documentation
 
 Start with [ARCHITECTURE.md](./CONTRIBUTING/ARCHITECTURE.md) for how the pieces fit together,
-or [API_FOLDER.md](./CONTRIBUTING/API_FOLDER.md) for the `api/` folder convention. Every
-document is listed in the [Contribution Handbook](./CONTRIBUTING.md#contribution-handbook).
+or [API_FOLDER.md](./CONTRIBUTING/API_FOLDER.md) for the `api/` folder convention.
+[RELEASE.md](./RELEASE.md) covers tagging, publishing, and the container image. Every document is
+listed in the [Contribution Handbook](./CONTRIBUTING.md#contribution-handbook).
 
 ## Contributing
 

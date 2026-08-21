@@ -1,0 +1,67 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "@plushveil/api",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Report service health.",
+        "tags": ["ops"],
+        "parameters": [
+          {
+            "name": "verbose",
+            "in": "query",
+            "required": false,
+            "description": "Include the region in the response.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HealthStatus": {
+        "type": "object",
+        "description": "Service health, as reported by `get /health`.",
+        "properties": {
+          "dependenciesReady": {
+            "type": "boolean",
+            "description": "Whether every downstream dependency answered."
+          },
+          "region": {
+            "type": "string",
+            "description": "Set only when the caller asked for detail."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["degraded", "down", "ok"]
+          },
+          "uptime": {
+            "type": "number",
+            "description": "Seconds since the process started."
+          }
+        },
+        "required": ["dependenciesReady", "status", "uptime"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -12,12 +12,25 @@ contract. Either can be generated from the other, and neither is privileged.
 | `src/server/`     | `@plushveil/api/server` | HTTP server, router, middleware, filesystem route loading, runtime validation.                 |
 | `src/client/`     | `@plushveil/api/client` | Typed HTTP client driven by a generated `Api` interface.                                       |
 | `src/openapi/`    | internal                | Shared spec model: reading, writing, normalising, and diffing OpenAPI documents.               |
+| `src/schema/`     | internal                | Dependency-free JSON Schema subset validator and parameter coercion.                           |
 | `src/typescript/` | internal                | TypeScript compiler API wrapper: type extraction in one direction, code emission in the other. |
 | `bin/port.ts`     | `api-port`              | `api/` → `openapi.json` + `api.types.ts`.                                                      |
 | `bin/backport.ts` | `api-backport`          | `openapi.json` → `api/` + `api.types.ts`.                                                      |
+| `bin/server.ts`   | `api-server`            | Serves an `api/` folder over HTTP.                                                             |
+| `bin/lib/`        | internal                | Argument parsing, config loading, help text, and exit codes shared by every command.           |
 
-Both CLIs are thin argument parsers. All logic lives in `src/openapi/` and `src/typescript/`
-so the two directions share one spec model and cannot drift apart.
+Every command is a thin argument parser. All logic lives in `src/openapi/`, `src/typescript/`,
+and `src/server/`, so the two directions share one spec model and cannot drift apart. `bin/lib/`
+holds only the plumbing that is inherently about being a command — parsing `argv`, rendering
+`--help`, choosing an exit code — and nothing about specifications or TypeScript.
+
+`api-server` exists because a route module is not runnable on its own: it declares a contract and
+exports a handler, and something has to load the folder and bind a socket. It is the same
+`createServer` a consumer would call, with a command line in front of it.
+
+`src/schema/` is separate from `src/openapi/` because it is the one piece both the server and the
+CLIs need. The server validates requests with it at runtime and must not pull in the spec reader
+or `typescript` to do so; the CLIs use it to check a document they were handed.
 
 ### Data Flow
 
@@ -98,10 +111,9 @@ Running `api-backport` twice on the same spec produces byte-identical files. Run
 `api-port` on the result reproduces the original spec. Neither CLI writes a timestamp, a
 version banner, or a hash into its output.
 
-### Implementation Prerequisites
+### Resolution
 
-The public specifiers and command names above require `package.json` fields that do not exist
-yet and must be added when the packages are built:
+The public specifiers and command names above come from `package.json`:
 
 ```json
 {
@@ -111,11 +123,17 @@ yet and must be added when the packages are built:
     "./client": "./src/client/main.ts"
   },
   "bin": {
+    "api-backport": "./bin/backport.ts",
     "api-port": "./bin/port.ts",
-    "api-backport": "./bin/backport.ts"
+    "api-server": "./bin/server.ts"
   }
 }
 ```
 
 No build step is involved. Node executes the TypeScript sources directly, and `tsconfig.json`
 sets `noEmit`.
+
+Generated route modules import `@plushveil/api/server` rather than a relative path into `src/`,
+which is what a consumer writes. Node resolves a package's own name from inside it through the
+same `exports` map, so the emitted code compiles and runs both in this repository and in one that
+installed it.

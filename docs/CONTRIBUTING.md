@@ -39,6 +39,7 @@ Use the articles below for detailed, task-specific contributor guidance.
 | [SERVER.md](./CONTRIBUTING/SERVER.md)                                     | Reference for `@plushveil/api/server`.                                         |
 | [CLI.md](./CONTRIBUTING/CLI.md)                                           | Reference for the `api-port` and `api-backport` commands.                      |
 | [CLIENT.md](./CONTRIBUTING/CLIENT.md)                                     | Reference for `@plushveil/api/client`.                                         |
+| [RELEASE.md](./RELEASE.md)                                                | Tagging, what CD publishes, and the container image.                           |
 
 ## Development Environment
 

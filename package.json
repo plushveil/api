@@ -5,8 +5,18 @@
   "keywords": [],
   "license": "see license in LICENSE",
   "author": "The Team <plushveil@gray.blue>",
+  "bin": {
+    "api-backport": "./bin/backport.ts",
+    "api-port": "./bin/port.ts",
+    "api-server": "./bin/server.ts"
+  },
   "type": "module",
   "main": "./src/main.ts",
+  "exports": {
+    ".": "./src/main.ts",
+    "./server": "./src/server/main.ts",
+    "./client": "./src/client/main.ts"
+  },
   "scripts": {
     "lint": "oxfmt && oxlint --fix",
     "start": "node --watch .",

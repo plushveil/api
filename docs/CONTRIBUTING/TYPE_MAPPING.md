@@ -7,6 +7,28 @@ How TypeScript becomes OpenAPI 3.1, and back. This is the reference `api-port` a
 
 OpenAPI 3.1 schemas are JSON Schema 2020-12, so there is no separate dialect to reconcile.
 
+### Ordering
+
+Both CLIs emit collections in a canonical order, so `openapi.json` is diffable and
+`api-port --check` is meaningful. Output depends only on content, never on declaration order,
+filesystem order, or map iteration order.
+
+| Collection               | Order                                                                                                                                                                                                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/schemas`     | By name, ascending                                                                                                                                                                                                                                            |
+| `properties`             | By property name, ascending                                                                                                                                                                                                                                   |
+| `required`               | By name, ascending                                                                                                                                                                                                                                            |
+| `enum`                   | By value: strings lexicographically, numbers numerically (`10 \| 2` → `[2, 10]`)                                                                                                                                                                              |
+| `paths`                  | By path string, ascending                                                                                                                                                                                                                                     |
+| Methods within a path    | Fixed: `get`, `put`, `post`, `delete`, `options`, `head`, `patch`, `trace`                                                                                                                                                                                    |
+| `parameters`             | By `in` (`path`, `query`, `header`, `cookie`), then by name                                                                                                                                                                                                   |
+| `responses`              | By status code, numerically ascending; `default` last                                                                                                                                                                                                         |
+| Keywords within a schema | Fixed template, not alphabetical: `$ref`, `type`, `format`, `description`, `enum`, `const`, `default`, `example`, `items`, `prefixItems`, `properties`, `required`, `additionalProperties`, `oneOf`, `allOf`, `anyOf`, then the remaining constraint keywords |
+
+Because ordering is by name rather than by declaration, `api-backport` rewrites a hand-written
+`api/schemas.ts` in sorted order. That is expected: the sorted form is the fixed point, and the
+examples in these documents are already written in it.
+
 ### Supported Types
 
 | TypeScript                  | JSON Schema                                                    | Notes                                                               |

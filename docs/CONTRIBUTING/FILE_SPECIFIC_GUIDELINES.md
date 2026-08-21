@@ -15,8 +15,22 @@ Files under `api/`. The convention is documented in [API_FOLDER.md](./API_FOLDER
 
 ### Generated Files
 
-- `openapi.json` and `api.types.ts` are generated. Commit them, never hand-edit them.
+- `openapi.json`, `api.types.ts`, and `api/schemas.ts` are generated. Commit them, never hand-edit them.
+- `api/schemas.ts` is rewritten by `api-backport` on every run and is not protected by `--force`, unlike route modules.
 - Review their diffs like any other diff — a surprising change there means a surprising change to the contract.
+- Regenerate with default flags. The committed artefacts must be exactly what `npx api-port ./api` produces, or the `--check` guard cannot pass.
+
+### Generated Output Is Already Formatted
+
+Nothing is exempt from `oxfmt` or `oxlint`, including generated files. Both CLIs emit output that
+is already a fixed point of this project's own formatter, and a test asserts it:
+`oxfmt --check` and `oxlint` are run over a freshly backported folder in
+`test/suites/port.test.ts`.
+
+Two consequences for anyone changing the emitters:
+
+- The writer in `src/openapi/json.ts` mirrors the formatter's JSON style — objects always expand, an array of scalars collapses onto one line when it fits inside `printWidth`. Changing `printWidth` in `oxfmt.config.ts` means changing `PRINT_WIDTH` there too.
+- The emitter in `src/typescript/emit.ts` only ever writes multi-line JSDoc, and puts a description in prose rather than in an `@description` tag, because those are the forms the formatter leaves alone. The formatter otherwise rewrites tag content — it capitalises descriptions, converts `@description` into prose, and reflows `@example` — and JSDoc is the channel that carries OpenAPI metadata (see [TYPE_MAPPING.md](./TYPE_MAPPING.md)), so an unstable form would corrupt the specification on the next `npm run lint`.
 
 ### TypeScript Files
 
@@ -29,7 +43,8 @@ Files under `api/`. The convention is documented in [API_FOLDER.md](./API_FOLDER
 - Use relative links between documents, and link rather than repeat. No feature is described in two places.
 - Prefer a table over a bulleted list for anything with a repeating shape: options, flags, type mappings, exit codes.
 - Keep code blocks valid under the project's `tsconfig.json` and tag every block with its language.
-- Put new documents in `docs/CONTRIBUTING/` and add them to the Contribution Handbook table in [CONTRIBUTING.md](../CONTRIBUTING.md). That table is the one index; do not start a second one.
+- Put contributor guidance in `docs/CONTRIBUTING/`. A document that is not guidance — something a consumer or an operator reads, like [RELEASE.md](../RELEASE.md) — belongs at the `docs/` root instead.
+- Either way, add it to the Contribution Handbook table in [CONTRIBUTING.md](../CONTRIBUTING.md). That table is the one index; do not start a second one.
 
 ### YAML Files
 

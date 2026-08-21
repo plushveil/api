@@ -1,0 +1,8 @@
+# The image carries only the package sources; everything else is build-context weight.
+*
+!package.json
+!src/
+!bin/
+
+# Never ship tests or fixtures: the folder to serve is mounted at run time.
+**/*.test.ts
