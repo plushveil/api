@@ -11,6 +11,7 @@
 │   ├── server.ts      # api-server: serves an api/ folder over HTTP
 │   └── lib/           # Argument parsing, config loading, help text, exit codes
 ├── Dockerfile         # Image that serves a mounted api/ folder with api-server
+├── dist/              # Build output. Generated, gitignored, and the only thing published
 ├── docs/              # Project documentation
 │   └── CONTRIBUTING/  # Contribution guidelines and package references
 ├── src/               # Source code

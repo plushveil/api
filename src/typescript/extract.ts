@@ -44,7 +44,7 @@ const LOCATIONS: [string, ParameterLocation][] = [
  */
 export async function extractRoutes(dir: string, options: ExtractOptions = {}): Promise<ExtractResult> {
   const discovered = await discoverRoutes(dir, { basePath: options.basePath })
-  const host = options.host ?? createHost({ project: options.project })
+  const host = options.host ?? (await createHost({ project: options.project }))
   const owned = options.host === undefined
   const warnings: string[] = []
   const components = createComponents()

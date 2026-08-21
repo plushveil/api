@@ -1,0 +1,22 @@
+{
+  // The publish build. `tsconfig.json` stays `noEmit` and covers the whole repository for
+  // type-checking; this one compiles only what ships.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    // Keeps the shape of the repository, so `src/server/main.ts` becomes `dist/src/server/main.js`
+    // and the `exports` map reads the same as the source tree.
+    "rootDir": ".",
+
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    // Sources are written with `.ts` import specifiers, which normally forbids emit. This rewrites
+    // them to `.js` in the output, so the published package resolves without a loader.
+    "rewriteRelativeImportExtensions": true
+  },
+  // Tests, fixtures, and configuration are not part of the package.
+  "include": ["src/**/*.ts", "bin/**/*.ts"]
+}

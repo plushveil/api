@@ -69,39 +69,64 @@ a development dependency, so porting is a development-time activity and not part
 
 Two implementation details worth knowing before changing the `Dockerfile`:
 
-- **The package lives in `/opt`, not `node_modules`.** Node refuses to strip types from any file whose real path is under `node_modules` (`ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING`), and this package ships TypeScript. `/node_modules/@plushveil/api` is a symlink to `/opt/plushveil-api`, so a mounted route module's `import … from '@plushveil/api/server'` still resolves, while the file Node actually loads sits outside `node_modules`.
+- **It is a two-stage build.** The first stage installs the compiler and runs `npm run build`; the second copies only `package.json` and `dist/`, so no compiler reaches the image. The package sits at `/node_modules/@plushveil/api` as an ordinary install, which is only possible because it is compiled — shipping `.ts` there would hit the `node_modules` stripping ban. A mounted route module is outside `node_modules`, so it is still stripped normally, which is why the image pins Node.
 - **There is no `VOLUME` for `/api`.** Declaring one would make Docker create an empty anonymous volume, so a container started without a mount would find an empty directory and serve nothing. Leaving it out means the path does not exist and `api-server` exits `1` saying so.
 
-## A consumer cannot `npm install` this package and run it as-is
+## The build
 
-This is the one thing to understand before publishing.
-
-The package ships TypeScript sources with no build step: `exports` points at `.ts` files and
-`tsconfig.json` sets `noEmit`. Node's type stripping refuses to run on anything under
-`node_modules`, so a consumer who installs the package and imports
-`@plushveil/api/server` gets:
+The published package is compiled. It has to be: Node refuses to strip types from any file whose real
+path is under `node_modules`, so a package of `.ts` files fails on `import` the moment it is
+installed:
 
 ```text
 Error [ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING]:
 Stripping types is currently unsupported for files under node_modules
 ```
 
-The tests do not catch this, because inside this repository the specifier resolves to the repository
-root through the `exports` self-reference and never touches `node_modules`.
+`npm run build` compiles `src/` and `bin/` to `dist/` with declarations and source maps, using
+[`tsconfig.build.json`](../tsconfig.build.json). `prepack` runs it, so `npm pack` and `npm publish`
+cannot ship a stale or missing build. `pretest` runs it too, because `exports` points into `dist/`
+and the fixture imports `@plushveil/api/server`.
 
-Until it is resolved, the npm artefact is usable by anything that compiles or bundles the sources
-itself — and the container image works, because it sidesteps `node_modules` by construction. The
-options, none of which has been chosen yet:
+Imports are written with `.ts` specifiers, which normally forbids emit;
+`rewriteRelativeImportExtensions` rewrites them to `.js` in the output, so the published package
+needs no loader.
 
-| Option                                                                       | Cost                                                                                                                                      |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Add a build step emitting `.js` + `.d.ts`, and point `exports` at the output | Contradicts the no-build-step rule in [ARCHITECTURE.md](./CONTRIBUTING/ARCHITECTURE.md); needs a `files` allowlist and a `prepack` script |
-| Publish sources and document that consumers must bundle                      | Rules out plain `node` consumers, which is most of them                                                                                   |
-| Ship the image as the primary artefact and treat npm as source distribution  | Honest, but narrows the client package's usefulness, since a browser client has to be bundled anyway                                      |
+### What consumers get
+
+```bash
+npm install @plushveil/api
+```
+
+```ts
+import { createServer } from '@plushveil/api/server'
+import { createClient } from '@plushveil/api/client'
+```
+
+Plain Node, no loader, no bundler, and full types. Node 22 or newer, per `engines`.
+
+`api-port` and `api-backport` additionally need `typescript`, declared as an **optional** peer
+dependency: serving and consuming an API never need a compiler, and porting cannot work without one.
+A consumer who skipped it gets a sentence naming what to install rather than a resolution crash.
+
+Route modules a consumer writes are their own files, outside `node_modules`, so Node strips them
+normally — which needs Node 22.18 or 24 and later.
+
+### Why this cannot silently regress
+
+[`test/suites/package.test.ts`](../test/suites/package.test.ts) packs a real tarball, installs it
+into a throwaway project, and from there: imports both entry points, serves a request, runs all three
+commands, ports a folder, and type-checks a consumer file whose `tsconfig.json` deliberately lacks
+`allowImportingTsExtensions`. It also asserts the tarball contains `dist/` and nothing else.
+
+No other test can cover this. Inside the repository, `@plushveil/api/server` resolves through the
+`exports` self-reference to the repository root and never touches `node_modules` — the one path a
+consumer never takes, and the reason the problem went unnoticed until an install was actually tried.
 
 ## Checklist before tagging
 
-- `npm test` is green on the commit being released.
+- `npm test` is green on the commit being released. It builds first, and it includes the packaged-consumer suite.
+- `npm pack --dry-run` lists `dist/` and nothing else.
 - `docker build .` succeeds, and the image serves the fixture.
 - Generated artefacts under `test/fixtures/` are current: `api-port … --check` exits `0`.
 - Documentation matches behaviour — see the same-commit rule in [FILE_SPECIFIC_GUIDELINES.md](./CONTRIBUTING/FILE_SPECIFIC_GUIDELINES.md).

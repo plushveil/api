@@ -66,8 +66,11 @@ part of this package.
 What that costs, stated plainly: the validator implements the JSON Schema subset that
 [TYPE_MAPPING.md](./TYPE_MAPPING.md) documents and nothing more. A hand-written
 `openapi.json` using a keyword outside that subset is a validation error, not a silent pass.
-`typescript` is a development dependency, needed by the CLIs but never by the server or client
-at runtime.
+
+`typescript` is an **optional peer dependency**. The server and the client never touch it; `api-port`
+and `api-backport` do, and they load it dynamically so a consumer who installed only the runtime gets
+a sentence telling them what to install rather than a module-resolution crash. Anyone writing route
+modules already has a compiler, so in practice it is already there.
 
 #### 2. TypeScript is the source of truth for shape; JSDoc for everything else
 
@@ -111,6 +114,27 @@ Running `api-backport` twice on the same spec produces byte-identical files. Run
 `api-port` on the result reproduces the original spec. Neither CLI writes a timestamp, a
 version banner, or a hash into its output.
 
+#### 6. Development runs from source; consumers get a build
+
+Locally there is no build: `node bin/port.ts` runs the sources directly through Node's type
+stripping, and `tsconfig.json` sets `noEmit` so type-checking never emits anything.
+
+Publishing is different, and it has to be. Node refuses to strip types from any file whose real path
+is under `node_modules`, so a package of `.ts` files is unusable the moment it is installed. So
+`npm pack` and `npm publish` run `prepack`, which compiles `src/` and `bin/` to `dist/` with
+declarations, and `exports` points there.
+
+|          | Development         | Consumer                     |
+| -------- | ------------------- | ---------------------------- |
+| Entry    | `src/**/*.ts`       | `dist/src/**/*.js` + `.d.ts` |
+| Run with | Node type stripping | Plain Node                   |
+| Built by | nothing             | `prepack`                    |
+
+Two consequences worth knowing:
+
+- Imports are written with `.ts` specifiers, which normally forbids emit. `rewriteRelativeImportExtensions` rewrites them to `.js` in the output, so the published package needs no loader.
+- `exports` points into `dist/`, so the fixture's `@plushveil/api/server` import resolves there too. That is why `pretest` builds: without it, type-checking the repository would fail on its own fixture.
+
 ### Resolution
 
 The public specifiers and command names above come from `package.json`:
@@ -118,22 +142,25 @@ The public specifiers and command names above come from `package.json`:
 ```json
 {
   "exports": {
-    ".": "./src/main.ts",
-    "./server": "./src/server/main.ts",
-    "./client": "./src/client/main.ts"
+    ".": { "types": "./dist/src/main.d.ts", "default": "./dist/src/main.js" },
+    "./server": { "types": "./dist/src/server/main.d.ts", "default": "./dist/src/server/main.js" },
+    "./client": { "types": "./dist/src/client/main.d.ts", "default": "./dist/src/client/main.js" }
   },
   "bin": {
-    "api-backport": "./bin/backport.ts",
-    "api-port": "./bin/port.ts",
-    "api-server": "./bin/server.ts"
-  }
+    "api-backport": "./dist/bin/backport.js",
+    "api-port": "./dist/bin/port.js",
+    "api-server": "./dist/bin/server.js"
+  },
+  "files": ["dist"]
 }
 ```
 
-No build step is involved. Node executes the TypeScript sources directly, and `tsconfig.json`
-sets `noEmit`.
-
 Generated route modules import `@plushveil/api/server` rather than a relative path into `src/`,
-which is what a consumer writes. Node resolves a package's own name from inside it through the
-same `exports` map, so the emitted code compiles and runs both in this repository and in one that
+which is what a consumer writes. Node resolves a package's own name from inside it through the same
+`exports` map, so the emitted code compiles and runs both in this repository and in one that
 installed it.
+
+`test/suites/package.test.ts` is what keeps this honest: it packs a tarball, installs it into a
+throwaway project, and serves a request from there. No other test can, because inside this
+repository the specifier self-references the repository root and never touches `node_modules` — the
+one code path a consumer never takes.

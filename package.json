@@ -1,25 +1,60 @@
 {
   "name": "@plushveil/api",
   "version": "1.0.0",
-  "description": "",
-  "keywords": [],
+  "description": "Keep an OpenAPI specification and a TypeScript implementation in sync, in both directions.",
+  "keywords": [
+    "codegen",
+    "http-client",
+    "http-server",
+    "openapi",
+    "openapi-generator",
+    "typescript"
+  ],
+  "homepage": "https://github.com/plushveil/api#readme",
+  "bugs": {
+    "url": "https://github.com/plushveil/api/issues"
+  },
   "license": "see license in LICENSE",
   "author": "The Team <plushveil@gray.blue>",
-  "bin": {
-    "api-backport": "./bin/backport.ts",
-    "api-port": "./bin/port.ts",
-    "api-server": "./bin/server.ts"
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/plushveil/api.git"
   },
+  "bin": {
+    "api-backport": "dist/bin/backport.js",
+    "api-port": "dist/bin/port.js",
+    "api-server": "dist/bin/server.js"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "main": "./src/main.ts",
+  "main": "./dist/src/main.js",
+  "types": "./dist/src/main.d.ts",
   "exports": {
-    ".": "./src/main.ts",
-    "./server": "./src/server/main.ts",
-    "./client": "./src/client/main.ts"
+    ".": {
+      "types": "./dist/src/main.d.ts",
+      "default": "./dist/src/main.js"
+    },
+    "./server": {
+      "types": "./dist/src/server/main.d.ts",
+      "default": "./dist/src/server/main.js"
+    },
+    "./client": {
+      "types": "./dist/src/client/main.d.ts",
+      "default": "./dist/src/client/main.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "lint": "oxfmt && oxlint --fix",
-    "start": "node --watch .",
+    "prepack": "npm run build",
+    "pretest": "npm run build",
+    "start": "node bin/server.ts test/fixtures/api-health/api",
     "test": "npm run test:lint && npm run test:format && npm run test:types && npm run test:smoke",
     "test:format": "oxfmt --check",
     "test:lint": "oxlint",
@@ -32,5 +67,16 @@
     "oxlint": "^1.77.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "typescript": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

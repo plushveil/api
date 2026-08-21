@@ -7,3 +7,6 @@ node_modules/
 
 # Build output
 dist/
+
+# Packed tarballs. `npm pack --dry-run` writes one despite the name.
+*.tgz

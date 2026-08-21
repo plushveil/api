@@ -8,7 +8,7 @@
  */
 
 import { resolve } from 'node:path'
-import { API, DiagnosticCategory, type Checker, type Program, type Symbol as TsSymbol } from 'typescript/unstable/sync'
+import type { API, Checker, Program, Symbol as TsSymbol } from 'typescript/unstable/sync'
 
 export interface HostOptions {
   /**
@@ -42,6 +42,30 @@ export class HostError extends Error {
 }
 
 /**
+ * The parts of `typescript/unstable/sync` this module needs as values rather than types.
+ */
+interface CompilerModule {
+  API: new () => API
+  DiagnosticCategory: { Error: unknown }
+}
+
+/**
+ * Loads the compiler.
+ *
+ * `typescript` is an optional peer dependency: the server and client never need it, and porting
+ * does. Imported dynamically so a consumer who installed only the runtime gets a sentence telling
+ * them what to install, instead of `ERR_MODULE_NOT_FOUND` from a file they have never seen.
+ */
+async function loadCompiler(): Promise<CompilerModule> {
+  try {
+    return await import('typescript/unstable/sync')
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause)
+    throw new HostError(`This command needs the \`typescript\` package, which is an optional peer dependency. Install it with \`npm install --save-dev typescript\`. (${detail})`)
+  }
+}
+
+/**
  * Opens the project snapshot, tearing the compiler server down on failure — otherwise the tsgo
  * child would keep the event loop alive and the CLI would hang instead of reporting the error.
  */
@@ -54,9 +78,10 @@ function openSnapshot(api: API, project: string, close: () => void): ReturnType<
   }
 }
 
-export function createHost(options: HostOptions = {}): Host {
+export async function createHost(options: HostOptions = {}): Promise<Host> {
+  const compiler = await loadCompiler()
   const project = resolve(options.project ?? 'tsconfig.json')
-  const api = new API()
+  const api = new compiler.API()
 
   let closed = false
   const close = (): void => {
@@ -101,7 +126,7 @@ export function createHost(options: HostOptions = {}): Host {
       // `getSemanticDiagnostics` takes a document identifier, which may be a plain path.
       return program
         .getSemanticDiagnostics(absolute)
-        .filter((d) => d.category === DiagnosticCategory.Error)
+        .filter((d) => d.category === compiler.DiagnosticCategory.Error)
         .map((d) => `${d.fileName ?? absolute}:${d.pos} ${d.text}`)
     },
 

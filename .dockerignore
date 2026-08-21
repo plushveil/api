@@ -1,8 +1,12 @@
-# The image carries only the package sources; everything else is build-context weight.
+# Only what the build stage needs; everything else is build-context weight.
 *
 !package.json
+!tsconfig.json
+!tsconfig.build.json
 !src/
 !bin/
 
-# Never ship tests or fixtures: the folder to serve is mounted at run time.
+# Never ship tests, and never copy a host build into the image — the build stage makes its own.
 **/*.test.ts
+dist/
+node_modules/

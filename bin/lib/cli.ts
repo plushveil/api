@@ -121,9 +121,24 @@ export function help(spec: CommandSpec): string {
 
 /** Reads this package's version, for `--version`. */
 export async function version(): Promise<string> {
-  const here = dirname(fileURLToPath(import.meta.url))
-  const manifest = JSON.parse(await readFile(join(here, '..', '..', 'package.json'), 'utf8')) as { name: string, version: string }
-  return `${manifest.name} ${manifest.version}`
+  // Walked rather than counted. This file sits at bin/lib/ in the sources and at dist/bin/lib/ once
+  // built, so a fixed number of `..` segments is right in exactly one of the two layouts.
+  let directory = dirname(fileURLToPath(import.meta.url))
+  for (;;) {
+    const candidate = join(directory, 'package.json')
+    const contents = await readFile(candidate, 'utf8').catch(() => undefined)
+    if (contents !== undefined) {
+      const manifest: unknown = JSON.parse(contents)
+      const record = typeof manifest === 'object' && manifest !== null ? { ...manifest } : {}
+      const name = 'name' in record && typeof record.name === 'string' ? record.name : 'api'
+      const declared = 'version' in record && typeof record.version === 'string' ? record.version : '0.0.0'
+      return `${name} ${declared}`
+    }
+
+    const parent = dirname(directory)
+    if (parent === directory) throw new CliError('could not locate package.json to read the version from')
+    directory = parent
+  }
 }
 
 /** True when the flag was given. */

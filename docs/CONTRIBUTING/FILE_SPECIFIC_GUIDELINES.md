@@ -34,8 +34,16 @@ Two consequences for anyone changing the emitters:
 
 ### TypeScript Files
 
-- No runtime dependencies. `node:*` and web standards only; `typescript` is available to `bin/` and tooling, never to `src/server/` or `src/client/`.
+- No runtime dependencies. `node:*` and web standards only; `typescript` is an optional peer available to `bin/` and `src/typescript/`, never to `src/server/` or `src/client/`.
+- Import with `.ts` specifiers. The build rewrites them to `.js`, so a `.js` specifier in source would survive into the output and resolve to nothing.
 - Public API changes require a documentation change in the same commit. Every exported symbol appears in exactly one document.
+
+### The Build
+
+- `dist/` is generated. Never edit it, never commit it, never import from it inside the repository — use `src/` directly.
+- `npm run build` compiles `src/` and `bin/`. `prepack` runs it before packing, and `pretest` runs it because `exports` points into `dist/` and the fixture imports `@plushveil/api/server`.
+- Anything added to the published surface belongs in `tsconfig.build.json`'s `include` and, if it is a new entry point, in `exports`.
+- A change to what ships must keep [`test/suites/package.test.ts`](../../test/suites/package.test.ts) passing. It installs a real tarball, which is the only check that covers the path a consumer takes.
 
 ### Markdown Files
 
