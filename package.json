@@ -1,0 +1,26 @@
+{
+  "name": "@plushveil/api",
+  "version": "1.0.0",
+  "description": "",
+  "keywords": [],
+  "license": "see license in LICENSE",
+  "author": "The Team <plushveil@gray.blue>",
+  "type": "module",
+  "main": "./src/main.ts",
+  "scripts": {
+    "lint": "oxfmt && oxlint --fix",
+    "start": "node --watch .",
+    "test": "npm run test:lint && npm run test:format && npm run test:types && npm run test:smoke",
+    "test:format": "oxfmt --check",
+    "test:lint": "oxlint",
+    "test:smoke": "node --test-global-setup=./test/setup.ts --test test/**/*.test.ts",
+    "test:types": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "typescript": "^7.0.2"
+  }
+}
