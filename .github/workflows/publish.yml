@@ -2,8 +2,10 @@ name: CD
 
 on:
   push:
+    # Only exact versions. The moving v1 and v1.2 tags cannot be published: npm rejects `1` as a
+    # version, and they point at a commit some vMAJOR.MINOR.PATCH tag already published.
     tags:
-      - 'v*'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   # `release.sh` dispatches this workflow after moving a tag. A tag that is force-moved to a new
   # commit does not always emit a push event, so the dispatch is what makes a re-release publish.
   workflow_dispatch:
@@ -11,6 +13,11 @@ on:
       tag:
         description: 'Tag to publish (for example, v1.2.3)'
         required: true
+        type: string
+      docker_tags:
+        description: 'Image tags to push, comma separated (for example, 1.2.3,1.2,1,latest)'
+        required: false
+        default: ''
         type: string
 
 # `github.ref_name` is the tag for a push and the branch for a dispatch, so neither is usable on its
@@ -129,12 +136,25 @@ jobs:
       # Derived from the repository name, so a fork or a rename cannot publish to the wrong package.
       - name: Derive image tags
         id: tags
+        env:
+          # `release.sh` works out which moving aliases this release is allowed to claim, because
+          # only it knows what other versions exist. A bare tag push gets the exact version alone.
+          DOCKER_TAGS: ${{ inputs.docker_tags || '' }}
         run: |
           IMAGE="ghcr.io/${GITHUB_REPOSITORY,,}"
           VERSION="${RELEASE_TAG#v}"
+
+          IFS=',' read -ra ALIASES <<< "${DOCKER_TAGS:-$VERSION}"
+          TAGS=()
+          for ALIAS in "${ALIASES[@]}"; do
+            TAGS+=("${IMAGE}:${ALIAS}")
+          done
+
+          IFS=','
           {
-            echo "tags=${IMAGE}:${VERSION},${IMAGE}:${RELEASE_TAG},${IMAGE}:latest"
+            echo "tags=${TAGS[*]}"
             echo "image=${IMAGE}"
+            echo "version=${VERSION}"
           } >> "$GITHUB_OUTPUT"
 
       - name: Build and push image
@@ -158,7 +178,7 @@ jobs:
       # pushed image is pulled back and exercised against the repository's own fixture.
       - name: Verify the pushed image serves a mounted folder
         run: |
-          IMAGE="${{ steps.tags.outputs.image }}:${RELEASE_TAG}"
+          IMAGE="${{ steps.tags.outputs.image }}:${{ steps.tags.outputs.version }}"
           docker run -d --name verify -p 3000:3000 \
             -v "$PWD/test/fixtures/api-health/api:/api:ro" "$IMAGE"
 
