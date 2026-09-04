@@ -136,6 +136,25 @@ await describe('createServer', async () => {
     }
   })
 
+  await it('reads a POST body over a real socket, not just through fetch', async () => {
+    // The Node adapter hands the handler the raw `IncomingMessage` as well as the constructed
+    // `Request`; the body must still come from the latter, or every real request loses its body.
+    const router = createRouter().add('post', '/echo', async ({ body }) => ({ status: 200, body }))
+    const server = createServer({ routes: router })
+    const address = await server.listen(0, '127.0.0.1')
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/echo`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ hello: 'world' }),
+      })
+      assert.equal(response.status, 200)
+      assert.deepEqual(await readJson(response), { hello: 'world' })
+    } finally {
+      await server.close()
+    }
+  })
+
   await it('answers 404 for an unmatched request', async () => {
     const server = createServer({ routes: API })
     assert.equal((await server.fetch(new Request('http://localhost/nope'))).status, 404)

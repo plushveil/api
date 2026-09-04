@@ -16,13 +16,13 @@ import { validateRequest, validateResponse } from './validate.ts'
  * catches middleware that throws on the way in, and finalisation itself — a failure there must
  * still produce a Response rather than rejecting.
  */
-export async function dispatch(runtime: Runtime, router: Router, context: Context, document: Document | undefined): Promise<Response> {
+export async function dispatch(runtime: Runtime, router: Router, context: Context, document: Document | undefined, request: Request): Promise<Response> {
   try {
     await run(runtime.middleware, context, async () => {
       try {
-        if (context.request.raw === undefined || context.request.body === undefined) {
+        if (context.request.body === undefined) {
           // Nothing has read the body yet; do it before validation needs it.
-          context.request.body = await readBodyFor(context, runtime)
+          context.request.body = await readBody(request, runtime.options.bodyLimit ?? 1_048_576)
         }
         await router.handle(context, {
           beforeHandler: document ? (matched) => validateRequest(runtime, matched, document) : undefined,
@@ -46,12 +46,6 @@ export async function dispatch(runtime: Runtime, router: Router, context: Contex
       headers: { 'content-type': 'application/json; charset=utf-8' },
     })
   }
-}
-
-async function readBodyFor(context: Context, runtime: Runtime): Promise<unknown> {
-  const web = context.request.raw instanceof Request ? context.request.raw : undefined
-  if (!web) return context.request.body
-  return readBody(web, runtime.options.bodyLimit ?? 1_048_576)
 }
 
 function reportResponseProblems(runtime: Runtime, context: Context, document: Document): void {

@@ -80,14 +80,14 @@ export function createServer(options: ServerOptions = {}): Server {
 
   async function handle(request: Request, raw?: IncomingMessage, signal?: AbortSignal): Promise<Response> {
     await ready
-    const context = createContext({ request, runtime, raw: raw ?? request, signal })
+    const context = createContext({ request, runtime, raw, signal })
 
     if (basePath !== '/') {
       const stripped = stripBasePath(context.request.url.pathname)
       if (stripped !== context.request.url.pathname) context.request.url = new URL(stripped + context.request.url.search, context.request.url.origin)
     }
 
-    return dispatch(runtime, router, context, document)
+    return dispatch(runtime, router, context, document, request)
   }
 
   const server: Server = {
