@@ -60,7 +60,8 @@
     "test:format": "oxfmt --check",
     "test:lint": "oxlint",
     "test:smoke": "node --test-global-setup=./test/setup.ts --test test/**/*.test.ts",
-    "test:types": "tsc --noEmit"
+    "test:types": "tsc --noEmit",
+    "version": "node bin/port.ts test/fixtures/api-health/api --out test/fixtures/api-health/openapi.json --types test/fixtures/api-health/api.types.ts && git add test/fixtures/api-health/openapi.json test/fixtures/api-health/api.types.ts"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
