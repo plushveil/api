@@ -11,16 +11,23 @@ import { copyFile, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { isRecord } from '../helpers/json.ts'
 
 const root = new URL('../../', import.meta.url).pathname
 const FIXTURE = join(root, 'test/fixtures/api-health')
 const PORT = join(root, 'bin/port.ts')
 const BACKPORT = join(root, 'bin/backport.ts')
 
+const fixtureSpec: unknown = JSON.parse(await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))
+if (!isRecord(fixtureSpec) || !isRecord(fixtureSpec.info) || typeof fixtureSpec.info.version !== 'string') throw new Error('expected the fixture to have info.version')
+const FIXTURE_VERSION = fixtureSpec.info.version
+
 /**
- * The fixture's own artefacts, which `--check` is expected to agree with.
+ * The fixture's own artefacts, which `--check` is expected to agree with. `--api-version` is
+ * pinned to the fixture's own version rather than left to default to the package's, so the
+ * fixture does not need regenerating every time the package version changes.
  */
-const ARTEFACTS = ['--out', join(FIXTURE, 'openapi.json'), '--types', join(FIXTURE, 'api.types.ts')]
+const ARTEFACTS = ['--out', join(FIXTURE, 'openapi.json'), '--types', join(FIXTURE, 'api.types.ts'), '--api-version', FIXTURE_VERSION]
 
 interface Run {
   code: number

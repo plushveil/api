@@ -86,7 +86,7 @@ await describe('api-port', async () => {
   })
 
   await it('writes the specification to stdout for `--out -`', async () => {
-    const result = await run(PORT, [join(FIXTURE, 'api'), '--out', '-', '--no-types'])
+    const result = await run(PORT, [join(FIXTURE, 'api'), '--out', '-', '--no-types', '--api-version', FIXTURE_VERSION])
     assert.equal(result.code, 0, result.stderr)
     assert.equal(result.stdout, await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))
   })

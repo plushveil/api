@@ -56,13 +56,11 @@
     "prepack": "npm run build && node -e \"fs.cpSync('docs/README.md', 'README.md')\"",
     "pretest": "npm run build",
     "start": "node bin/server.ts test/fixtures/api-health/api",
-    "sync-fixtures": "node bin/port.ts test/fixtures/api-health/api --out test/fixtures/api-health/openapi.json --types test/fixtures/api-health/api.types.ts",
-    "test": "npm run build && npm run sync-fixtures && npm run test:lint && npm run test:format && npm run test:types && npm run test:smoke",
+    "test": "npm run build && npm run test:lint && npm run test:format && npm run test:types && npm run test:smoke",
     "test:format": "oxfmt --check",
     "test:lint": "oxlint",
     "test:smoke": "node --test-global-setup=./test/setup.ts --test test/**/*.test.ts",
-    "test:types": "tsc --noEmit",
-    "version": "npm run sync-fixtures && git add test/fixtures/api-health/openapi.json test/fixtures/api-health/api.types.ts"
+    "test:types": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^26.2.0",
