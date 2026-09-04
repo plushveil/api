@@ -1,6 +1,6 @@
 {
   "name": "@plushveil/api",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Keep an OpenAPI specification and a TypeScript implementation in sync, in both directions.",
   "keywords": [
     "codegen",
