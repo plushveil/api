@@ -78,7 +78,7 @@ async function applyError(runtime: Runtime, context: Context, error: unknown): P
     // The error handler itself failed. Report both, and fall back to a bare 500.
     console.error('The onError handler threw', secondary, { cause: normalised })
     context.response.status = 500
-    context.response.body = { error: 'internal', message: 'Something went wrong.' }
+    context.response.body = { type: 'error', error: { code: 500, message: 'Internal Server Error' } }
   }
 }
 

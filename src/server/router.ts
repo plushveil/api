@@ -88,7 +88,7 @@ export function createRouter(): Router {
       const found = router.match(context.request.method, context.request.url.pathname)
       if (!found) {
         context.response.status = 404
-        context.response.body = { error: 'not_found', message: 'No route matches this request.' }
+        context.response.body = { type: 'error', error: { code: 404, message: 'Not Found' } }
         return
       }
 
@@ -99,7 +99,7 @@ export function createRouter(): Router {
       const handler = route.handler ?? (route.load ? await route.load() : undefined)
       if (!handler) {
         context.response.status = 500
-        context.response.body = { error: 'internal', message: 'The route has no handler.' }
+        context.response.body = { type: 'error', error: { code: 500, message: 'Internal Server Error' } }
         return
       }
 

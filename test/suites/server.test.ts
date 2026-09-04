@@ -95,7 +95,7 @@ await describe('middleware', async () => {
   await it('short-circuits when next is not called', async () => {
     const guard: Middleware = async (context) => {
       context.response.status = 401
-      context.response.body = { error: 'unauthorised' }
+      context.response.body = { type: 'error', error: { code: 401, message: 'Unauthorized' } }
     }
     const server = createServer({ routes: createRouter().add('get', '/x', async () => ({ status: 200, body: 'reached' })), middleware: [guard] })
     const response = await server.fetch(new Request('http://localhost/x'))

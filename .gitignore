@@ -10,3 +10,7 @@ dist/
 
 # Packed tarballs. `npm pack --dry-run` writes one despite the name.
 *.tgz
+
+# `prepack` copies docs/README.md here so npm publishes it at the package root; `postpack` removes
+# it again. Ignored as a safety net in case a pack is interrupted before postpack runs.
+/README.md

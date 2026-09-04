@@ -20,6 +20,10 @@ import { isRecord } from '../helpers/json.ts'
 const root = new URL('../../', import.meta.url).pathname
 const FIXTURE = join(root, 'test/fixtures/api-health')
 
+const spec: unknown = JSON.parse(await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))
+if (!isRecord(spec) || !isRecord(spec.info) || typeof spec.info.version !== 'string') throw new Error('expected the fixture to have info.version')
+const FIXTURE_VERSION = spec.info.version
+
 interface Run {
   code: number
   stdout: string
@@ -190,7 +194,7 @@ await describe('the published package', async () => {
     )
 
     const out = join(workspace, 'openapi.json')
-    const result = await run(join(workspace, 'node_modules/.bin/api-port'), ['./api', '--out', out, '--no-types', '--title', '@plushveil/api', '--api-version', '1.0.0'], workspace)
+    const result = await run(join(workspace, 'node_modules/.bin/api-port'), ['./api', '--out', out, '--no-types', '--title', '@plushveil/api', '--api-version', FIXTURE_VERSION], workspace)
 
     assert.equal(result.code, 0, result.stderr)
     assert.equal(await readFile(out, 'utf8'), await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))

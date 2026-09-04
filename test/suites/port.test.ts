@@ -12,11 +12,16 @@ import { copyFile, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, it } from 'node:test'
+import { isRecord } from '../helpers/json.ts'
 
 const root = new URL('../../', import.meta.url).pathname
 const FIXTURE = join(root, 'test/fixtures/api-health')
 const PORT = join(root, 'bin/port.ts')
 const BACKPORT = join(root, 'bin/backport.ts')
+
+const spec: unknown = JSON.parse(await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))
+if (!isRecord(spec) || !isRecord(spec.info) || typeof spec.info.version !== 'string') throw new Error('expected the fixture to have info.version')
+const FIXTURE_VERSION = spec.info.version
 
 interface Run {
   code: number
@@ -73,7 +78,7 @@ await describe('api-port', async () => {
     const out = join(dir, 'openapi.json')
     const types = join(dir, 'api.types.ts')
 
-    const result = await run(PORT, [join(FIXTURE, 'api'), '--out', out, '--types', types, '--title', '@plushveil/api', '--api-version', '1.0.0'])
+    const result = await run(PORT, [join(FIXTURE, 'api'), '--out', out, '--types', types, '--title', '@plushveil/api', '--api-version', FIXTURE_VERSION])
     assert.equal(result.code, 0, result.stderr)
 
     assert.equal(await readFile(out, 'utf8'), await readFile(join(FIXTURE, 'openapi.json'), 'utf8'))
@@ -111,7 +116,7 @@ await describe('api-backport', async () => {
     assert.equal(back.code, 0, back.stderr)
 
     // The whole point: round-tripping through generated code changes nothing.
-    const again = await run(PORT, ['./api', '--out', './reported.json', '--no-types', '--title', '@plushveil/api', '--api-version', '1.0.0'], { cwd: dir })
+    const again = await run(PORT, ['./api', '--out', './reported.json', '--no-types', '--title', '@plushveil/api', '--api-version', FIXTURE_VERSION], { cwd: dir })
     assert.equal(again.code, 0, again.stderr)
     assert.equal(await readFile(join(dir, 'reported.json'), 'utf8'), original)
   })
