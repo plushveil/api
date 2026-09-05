@@ -46,6 +46,16 @@ await describe('schema validator', async () => {
     assert.deepEqual(compile({ type: 'string', format: 'something-invented' })('anything'), [])
   })
 
+  await it('does not enforce a format against null on a nullable schema', async () => {
+    // `type: ['string', 'null']` -- an optional formatted field -- must let null through: the
+    // `type` check already accepts it, and a format is a constraint on the string, not on
+    // whether the field is present at all.
+    const schema: Schema = { type: ['string', 'null'], format: 'uuid' }
+    assert.deepEqual(compile(schema)(null), [])
+    assert.deepEqual(compile(schema)('3f2a9c1e-0000-4a7b-8c11-b6d2e4f50a91'), [])
+    assert.equal(compile(schema)('nope').length, 1)
+  })
+
   await it('treats annotation keywords as no-ops', async () => {
     // Throwing on these would reject the documents api-port itself emits.
     const schema: Schema = { type: 'string', description: 'a', title: 'b', example: 'c', deprecated: true, readOnly: true }

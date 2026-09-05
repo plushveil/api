@@ -204,7 +204,13 @@ function assemble(schema: Schema, pointer: string, root: unknown, cache: Map<Sch
     const { format } = schema
     const checker = FORMATS[format]
     if (checker) {
-      checks.push((value, at) => (value === undefined || checker(value) ? [] : [{ path: at, message: `must match format ${JSON.stringify(format)}` }]))
+      // Guard on the runtime type, not just `undefined`, for the same reason `stringChecks` and
+      // `numberChecks` do: a wrong type is the `type` check's problem to report, and every format
+      // in `FORMATS` is a string format, so a non-string value -- most commonly `null`, on a
+      // schema whose `type` allows it (`type: ['string', 'null']`) -- must not also be reported as
+      // a format failure. `checker` itself already assumes a string internally; this keeps it from
+      // being called on anything else at all.
+      checks.push((value, at) => (typeof value !== 'string' || checker(value) ? [] : [{ path: at, message: `must match format ${JSON.stringify(format)}` }]))
     }
   }
 
