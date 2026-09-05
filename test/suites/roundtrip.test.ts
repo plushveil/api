@@ -74,3 +74,33 @@ await describe('round trip', async () => {
     assert.equal(route.text.includes('@description OK'), false)
   })
 })
+
+const binaryRoot = new URL('../fixtures/api-binary/', import.meta.url)
+
+async function committedBinarySpec(): Promise<string> {
+  return readFile(new URL('openapi.json', binaryRoot), 'utf8')
+}
+
+await describe('round trip, for Content<M, T>', async () => {
+  await it('emits api.types.ts identical to the committed file', async () => {
+    const document = parseDocument(await committedBinarySpec())
+    const expected = await readFile(new URL('api.types.ts', binaryRoot), 'utf8')
+    assert.equal(emitApiTypes(document), expected)
+  })
+
+  await it('imports Content only for the operation that uses it', async () => {
+    const document = parseDocument(await committedBinarySpec())
+    const files = emitAll(document)
+    const upload = files.find((f) => f.path === 'upload/put.ts')
+    assert.ok(upload)
+    assert.match(upload.text, /import \{ HttpError, type Content, type Handler \} from '@plushveil\/api\/server'/)
+  })
+
+  await it('does not mutate the document it emits from', async () => {
+    const bytes = await committedBinarySpec()
+    const document = parseDocument(bytes)
+    emitAll(document)
+    emitApiTypes(document)
+    assert.equal(stringify(document), bytes)
+  })
+})

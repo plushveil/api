@@ -40,6 +40,12 @@ export interface OperationShape {
  * Presence is tested with `'k' extends keyof Op` rather than by inspecting `Op['k']`, because an
  * absent key resolves to `unknown` — not `never` — so `[Op['body']] extends [never]` is false and
  * every body-less operation would otherwise be handed a required `body: unknown`.
+ *
+ * The body is unwrapped through `Payload<>`, the same as a response: a handler reads the request's
+ * bytes or parsed value directly (a `Uint8Array`, a `ReadableStream<Uint8Array>`, a parsed JSON
+ * body, ...) rather than the `Content<M, T>` wrapper `body: Content<M, T>` declares -- `context.ts`
+ * hands back the unwrapped payload for the same reason `router.ts`'s `applyResult` accepts a
+ * handler returning the unwrapped payload rather than a `Content` instance.
  */
 export type HandlerRequest<Op extends OperationShape> = {
   method: string
@@ -49,7 +55,7 @@ export type HandlerRequest<Op extends OperationShape> = {
 } & ('path' extends keyof Op ? { path: Op['path'] } : { path?: undefined }) &
   ('query' extends keyof Op ? { query: Op['query'] } : { query?: undefined }) &
   ('cookies' extends keyof Op ? { cookieParams: Op['cookies'] } : { cookieParams?: undefined }) &
-  ('body' extends keyof Op ? ([Op['body']] extends [never] ? { body?: undefined } : { body: Op['body'] }) : { body?: undefined })
+  ('body' extends keyof Op ? ([Op['body']] extends [never] ? { body?: undefined } : { body: Payload<Op['body']> }) : { body?: undefined })
 
 /**
  * Unwraps `Content<M, T>` to the payload a handler actually returns.
@@ -165,6 +171,24 @@ export interface Runtime {
   middleware: Middleware[]
   onError: NonNullable<ServerOptions['onError']>
   notFound: AnyHandler
+  /**
+   * Resolved from `bodyLimit`. Kept alongside `validate` on `Runtime`, rather than defaulted
+   * inline at the point of use, so there is exactly one place a body policy is resolved.
+   */
+  body: { limit: number }
+}
+
+/**
+ * One media type entry from a loaded spec's `content` map, prepared for validation and body
+ * reading.
+ */
+export interface IndexedMediaType {
+  schema?: Schema
+  /**
+   * Mirrors the media type object's `x-stream`: the body is handed to the handler as a
+   * `ReadableStream<Uint8Array>` rather than buffered.
+   */
+  stream: boolean
 }
 
 /**
@@ -173,8 +197,8 @@ export interface Runtime {
 export interface IndexedOperation {
   operationId?: string
   parameters: { name: string; in: ParameterLocation; required: boolean; schema?: Schema }[]
-  requestBody?: { required: boolean; schema?: Schema }
-  responses: Map<string, Schema | undefined>
+  requestBody?: { required: boolean; content: Map<string, IndexedMediaType> }
+  responses: Map<string, Map<string, IndexedMediaType>>
 }
 
 export type SpecIndex = Map<string, IndexedOperation>

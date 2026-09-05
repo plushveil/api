@@ -28,18 +28,18 @@ await server.listen(3000)
 
 ### Options
 
-| Option       | Type                                                | Default   | Description                                                                 |
-| ------------ | --------------------------------------------------- | --------- | --------------------------------------------------------------------------- |
-| `routes`     | `string \| Router`                                  | `'./api'` | An `api/` folder to load, or a router you built yourself.                   |
-| `spec`       | `string \| object`                                  | —         | Path to an `openapi.json`, or the parsed document. Required for validation. |
-| `validate`   | `boolean \| ValidateOptions`                        | `false`   | Validate requests, and optionally responses, against `spec`.                |
-| `basePath`   | `string`                                            | `'/'`     | Prefix stripped before matching and prepended in the spec.                  |
-| `middleware` | `Middleware[]`                                      | `[]`      | Middleware to register before the loaded routes' own.                       |
-| `onError`    | `(error, context) => Response \| Promise<Response>` | built-in  | Converts a thrown error into a response.                                    |
-| `notFound`   | `Handler`                                           | built-in  | Handles unmatched requests. Defaults to `404`.                              |
-| `bodyLimit`  | `number`                                            | `1048576` | Maximum request body size in bytes. Exceeding it is `413`.                  |
-| `trustProxy` | `boolean`                                           | `false`   | Honour `x-forwarded-*` when deriving `context.request.url`.                 |
-| `server`     | `http.Server`                                       | —         | An existing server to attach to instead of creating one.                    |
+| Option       | Type                                                | Default   | Description                                                                                                                                                                                                                                                                                                            |
+| ------------ | --------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `routes`     | `string \| Router`                                  | `'./api'` | An `api/` folder to load, or a router you built yourself.                                                                                                                                                                                                                                                              |
+| `spec`       | `string \| object`                                  | —         | Path to an `openapi.json`, or the parsed document. Required for validation.                                                                                                                                                                                                                                            |
+| `validate`   | `boolean \| ValidateOptions`                        | `false`   | Validate requests, and optionally responses, against `spec`.                                                                                                                                                                                                                                                           |
+| `basePath`   | `string`                                            | `'/'`     | Prefix stripped before matching and prepended in the spec.                                                                                                                                                                                                                                                             |
+| `middleware` | `Middleware[]`                                      | `[]`      | Middleware to register before the loaded routes' own.                                                                                                                                                                                                                                                                  |
+| `onError`    | `(error, context) => Response \| Promise<Response>` | built-in  | Converts a thrown error into a response.                                                                                                                                                                                                                                                                               |
+| `notFound`   | `Handler`                                           | built-in  | Handles unmatched requests. Defaults to `404`.                                                                                                                                                                                                                                                                         |
+| `bodyLimit`  | `number`                                            | `1048576` | Maximum buffered request body size in bytes. Exceeding it is `413`, checked from `content-length` when present and incrementally otherwise. Does not apply to a body declared `Content<M, ReadableStream<Uint8Array>>` -- see [Media Types](./API_FOLDER.md#media-types) -- which is handed to the handler unbuffered. |
+| `trustProxy` | `boolean`                                           | `false`   | Honour `x-forwarded-*` when deriving `context.request.url`.                                                                                                                                                                                                                                                            |
+| `server`     | `http.Server`                                       | —         | An existing server to attach to instead of creating one.                                                                                                                                                                                                                                                               |
 
 ### Returns
 
@@ -143,22 +143,22 @@ handler.
 
 Every middleware and handler receives the same `Context` for a request.
 
-| Member             | Type                         | Description                                                                                    |
-| ------------------ | ---------------------------- | ---------------------------------------------------------------------------------------------- |
-| `request.method`   | `string`                     | Uppercase.                                                                                     |
-| `request.url`      | `URL`                        | Absolute, honouring `trustProxy`.                                                              |
-| `request.path`     | `Record<string, string>`     | Path parameters, coerced when `validate.coerce` is on.                                         |
-| `request.query`    | `Record<string, unknown>`    | Parsed query, coerced when `validate.coerce` is on.                                            |
-| `request.headers`  | `Headers`                    | Case-insensitive.                                                                              |
-| `request.cookies`  | `Map<string, string>`        | Parsed from `cookie`.                                                                          |
-| `request.body`     | `unknown`                    | Parsed per content type. `undefined` until read.                                               |
-| `request.raw`      | `http.IncomingMessage`       | The unparsed stream, for when you need it.                                                     |
-| `response.status`  | `number`                     | Mutable.                                                                                       |
-| `response.headers` | `Headers`                    | Mutable.                                                                                       |
-| `response.body`    | `unknown`                    | Set by the handler; mutable afterwards.                                                        |
-| `state`            | `Record<string, unknown>`    | Per-request scratch space for passing values between middleware.                               |
-| `operation`        | `OperationInfo \| undefined` | The matched route's `method`, `path`, `operationId`, and file. Undefined when nothing matched. |
-| `signal`           | `AbortSignal`                | Aborts when the client disconnects.                                                            |
+| Member             | Type                         | Description                                                                                                                                                                                                                                                                                                    |
+| ------------------ | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `request.method`   | `string`                     | Uppercase.                                                                                                                                                                                                                                                                                                     |
+| `request.url`      | `URL`                        | Absolute, honouring `trustProxy`.                                                                                                                                                                                                                                                                              |
+| `request.path`     | `Record<string, string>`     | Path parameters, coerced when `validate.coerce` is on.                                                                                                                                                                                                                                                         |
+| `request.query`    | `Record<string, unknown>`    | Parsed query, coerced when `validate.coerce` is on.                                                                                                                                                                                                                                                            |
+| `request.headers`  | `Headers`                    | Case-insensitive.                                                                                                                                                                                                                                                                                              |
+| `request.cookies`  | `Map<string, string>`        | Parsed from `cookie`.                                                                                                                                                                                                                                                                                          |
+| `request.body`     | `unknown`                    | Parsed per content type: JSON, form-urlencoded, `text/*` as a string, anything else as a buffered `Uint8Array` -- or, when a matched operation declares it with `Content<M, ReadableStream<Uint8Array>>`, the unbuffered stream itself. `undefined` until read, and for a method with no body (`GET`, `HEAD`). |
+| `request.raw`      | `http.IncomingMessage`       | The unparsed stream, for when you need it.                                                                                                                                                                                                                                                                     |
+| `response.status`  | `number`                     | Mutable.                                                                                                                                                                                                                                                                                                       |
+| `response.headers` | `Headers`                    | Mutable.                                                                                                                                                                                                                                                                                                       |
+| `response.body`    | `unknown`                    | Set by the handler; mutable afterwards.                                                                                                                                                                                                                                                                        |
+| `state`            | `Record<string, unknown>`    | Per-request scratch space for passing values between middleware.                                                                                                                                                                                                                                               |
+| `operation`        | `OperationInfo \| undefined` | The matched route's `method`, `path`, `operationId`, and file. Undefined when nothing matched.                                                                                                                                                                                                                 |
+| `signal`           | `AbortSignal`                | Aborts when the client disconnects.                                                                                                                                                                                                                                                                            |
 
 To type `state` across your own middleware, declare it once:
 
@@ -224,12 +224,13 @@ import { HttpError } from '@plushveil/api/server'
 throw new HttpError(409, { code: 'conflict', message: 'That email is taken.' })
 ```
 
-| Class                     | Extends     | Status | Thrown when                                                          |
-| ------------------------- | ----------- | ------ | -------------------------------------------------------------------- |
-| `HttpError`               | `Error`     | yours  | You throw it.                                                        |
-| `ValidationError`         | `HttpError` | `400`  | A request fails validation. Carries `problems`.                      |
-| `ResponseValidationError` | `HttpError` | `500`  | A response fails validation. Carries `problems`.                     |
-| `RouteError`              | `Error`     | —      | A route module is malformed. Thrown at load time, never per request. |
+| Class                       | Extends     | Status | Thrown when                                                                |
+| --------------------------- | ----------- | ------ | -------------------------------------------------------------------------- |
+| `HttpError`                 | `Error`     | yours  | You throw it.                                                              |
+| `ValidationError`           | `HttpError` | `400`  | A request fails validation. Carries `problems`.                            |
+| `UnsupportedMediaTypeError` | `HttpError` | `415`  | A request body's `content-type` is not one the matched operation declares. |
+| `ResponseValidationError`   | `HttpError` | `500`  | A response fails validation. Carries `problems`.                           |
+| `RouteError`                | `Error`     | —      | A route module is malformed. Thrown at load time, never per request.       |
 
 Any other thrown value becomes a `500` with no detail in the body, and is logged. Override
 with `onError`:

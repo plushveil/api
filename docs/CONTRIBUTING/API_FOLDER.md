@@ -130,6 +130,33 @@ responses: {
 }
 ```
 
+Wrap a byte payload in `ReadableStream<Uint8Array>` instead of `Uint8Array` to receive or return
+it unbuffered rather than held in memory in full -- for a large upload or download in particular:
+
+```ts
+export interface Operation {
+  body: Content<'application/octet-stream', ReadableStream<Uint8Array>>
+  responses: {
+    204: never
+  }
+}
+
+export const handler: Handler<Operation> = async (request) => {
+  const reader = request.body.getReader() // request.body is the stream directly, not a Content
+  /* … */
+  return { status: 204 }
+}
+```
+
+Both forms describe the same schema (`{ "type": "string", "format": "binary" }`, per
+[TYPE_MAPPING.md](./TYPE_MAPPING.md)); the media type object's `x-stream: true` is what tells them
+apart, both in the specification and in `emit.ts`'s round trip back to `ReadableStream<Uint8Array>`
+rather than `Uint8Array`. A handler always receives -- and a client always sends or reads -- the
+unwrapped payload itself, never a `Content` instance: `request.body` is the `Uint8Array` or
+`ReadableStream<Uint8Array>` directly, and a handler returns `{ status: 200, body: <the payload>,
+headers: { 'content-type': '<the media type>' } }`, setting the media type via `headers` since a
+response with more than one declared media type has nothing else to pick a `content-type` from.
+
 ### The `handler` Export
 
 ```ts

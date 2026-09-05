@@ -6,10 +6,20 @@
  * See docs/CONTRIBUTING/ARCHITECTURE.md.
  */
 
-import { isMethod, type Document } from '../openapi/main.ts'
-import { coerce, compile, type Problem, type Schema } from '../schema/main.ts'
-import { ValidationError } from './errors.ts'
-import type { Context, Runtime, SpecIndex, ValidateOptions } from './types.ts'
+import { isMethod, type Document, type MediaTypeObject } from '../openapi/main.ts'
+import { coerce, compile, type Problem } from '../schema/main.ts'
+import { UnsupportedMediaTypeError, ValidationError } from './errors.ts'
+import type { Context, IndexedMediaType, IndexedOperation, Runtime, SpecIndex, ValidateOptions } from './types.ts'
+
+/**
+ * Converts a `content` map (`requestBody.content`, or one status's `responses[status].content`)
+ * into the form validation and body reading share.
+ */
+function mediaMap(content: Record<string, MediaTypeObject> | undefined): Map<string, IndexedMediaType> {
+  const map = new Map<string, IndexedMediaType>()
+  for (const [mediaType, media] of Object.entries(content ?? {})) map.set(mediaType, { schema: media.schema, stream: media['x-stream'] === true })
+  return map
+}
 
 /**
  * Indexes a document by `METHOD /path`, compiling every schema up front.
@@ -29,29 +39,51 @@ export function indexSpec(document: Document, basePath: string): SpecIndex {
         schema: p.schema,
       }))
 
-      const bodySchema = operation.requestBody?.content?.['application/json']?.schema
-      const responses = new Map<string, Schema | undefined>()
+      const requestContent = mediaMap(operation.requestBody?.content)
+      const responses = new Map<string, Map<string, IndexedMediaType>>()
       for (const [status, response] of Object.entries(operation.responses ?? {})) {
-        responses.set(status, response.content?.['application/json']?.schema)
+        responses.set(status, mediaMap(response.content))
       }
 
       const key = `${method.toUpperCase()} ${base}${path}`
       index.set(key, {
         operationId: operation.operationId,
         parameters,
-        requestBody: operation.requestBody ? { required: operation.requestBody.required ?? false, schema: bodySchema } : undefined,
+        requestBody: operation.requestBody ? { required: operation.requestBody.required ?? false, content: requestContent } : undefined,
         responses,
       })
 
       // Compiling here surfaces an unsupported keyword at startup, naming the operation, rather
       // than on whichever request happens to reach it.
       for (const parameter of parameters) if (parameter.schema) compile(parameter.schema, { root: document, pointer: key })
-      if (bodySchema) compile(bodySchema, { root: document, pointer: key })
-      for (const schema of responses.values()) if (schema) compile(schema, { root: document, pointer: key })
+      for (const media of requestContent.values()) if (media.schema) compile(media.schema, { root: document, pointer: key })
+      for (const statusMedia of responses.values()) for (const media of statusMedia.values()) if (media.schema) compile(media.schema, { root: document, pointer: key })
     }
   }
 
   return index
+}
+
+/**
+ * Looks up a route's indexed operation directly, ahead of a match reaching `context.operation` --
+ * `dispatch.ts` needs this before it can decide how to read the body, which happens before the
+ * router has set `context.operation` for this request.
+ */
+export function findOperation(runtime: Runtime, method: string, path: string): IndexedOperation | undefined {
+  const index = runtime.spec
+  if (!index) return undefined
+  const base = runtime.basePath === '/' ? '' : runtime.basePath
+  return index.get(`${method} ${base}${path}`)
+}
+
+/**
+ * The request's content type, ignoring parameters (`; boundary=...`, `; charset=...`). Bodyless
+ * requests and requests with no header both resolve to `application/json`, matching how a spec
+ * with one JSON-only media type has always been read.
+ */
+function requestMediaType(context: Context): string {
+  const type = context.request.headers.get('content-type')
+  return type ? type.split(';')[0].trim() || 'application/json' : 'application/json'
 }
 
 /**
@@ -128,9 +160,16 @@ export function validateRequest(runtime: Runtime, context: Context, document: Do
     const { body } = context.request
     if (body === undefined) {
       if (found.requestBody.required) problems.push({ in: 'body', path: '', message: 'is required' })
-    } else if (found.requestBody.schema) {
-      const check = compile(found.requestBody.schema, { root: document })
-      for (const problem of check(body)) problems.push({ in: 'body', path: problem.path, message: problem.message })
+    } else {
+      const type = requestMediaType(context)
+      const media = found.requestBody.content.get(type)
+      if (!media) throw new UnsupportedMediaTypeError(type, [...found.requestBody.content.keys()])
+      // A byte payload -- buffered (`Uint8Array`, from a declared or undeclared binary media type)
+      // or streamed (`media.stream`, left unread) -- cannot be checked against a JSON schema.
+      if (media.schema && !media.stream && !(body instanceof Uint8Array)) {
+        const check = compile(media.schema, { root: document })
+        for (const problem of check(body)) problems.push({ in: 'body', path: problem.path, message: problem.message })
+      }
     }
   }
 
@@ -182,10 +221,17 @@ export function validateResponse(runtime: Runtime, context: Context, document: D
   const found = index.get(specKey(runtime, context))
   if (!found) return []
 
-  const schema = found.responses.get(String(context.response.status)) ?? found.responses.get('default')
-  if (!schema) return []
+  const statusMedia = found.responses.get(String(context.response.status)) ?? found.responses.get('default')
+  if (!statusMedia) return []
 
-  return compile(schema, { root: document })(context.response.body)
+  // The handler's own `content-type`, defaulting to JSON as an unset header always has -- a
+  // handler returning a `Content<M, T>` response sets its media type via `headers`, applied by
+  // `applyResult` before this runs (see `router.ts`).
+  const type = context.response.headers.get('content-type')?.split(';')[0].trim() || 'application/json'
+  const media = statusMedia.get(type)
+  if (!media?.schema || media.stream || context.response.body instanceof Uint8Array) return []
+
+  return compile(media.schema, { root: document })(context.response.body)
 }
 
 /**

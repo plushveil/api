@@ -25,11 +25,11 @@ export interface State {}
 export { createRouter } from './router.ts'
 export { createServer, type Server } from './server.ts'
 export { discoverRoutes, loadRoutes, type DiscoveredRoute, type LoadRoutesOptions } from './load-routes.ts'
-export { HttpError, ResponseValidationError, RouteError, ValidationError } from './errors.ts'
+export { HttpError, ResponseValidationError, RouteError, UnsupportedMediaTypeError, ValidationError } from './errors.ts'
 export { MalformedPathError, compareRoutes, matchSegments, parsePattern, patternToPath, splitPath } from './route-path.ts'
 export { compose, run } from './compose.ts'
 export { finalize } from './finalize.ts'
-export { checkCoverage, indexSpec, resolveValidateOptions, validateRequest, validateResponse } from './validate.ts'
+export { checkCoverage, findOperation, indexSpec, resolveValidateOptions, validateRequest, validateResponse } from './validate.ts'
 export { createContext, parseCookies, parseQuery, readBody, PayloadTooLargeError } from './context.ts'
 export { createListener, sendResponse, toRequest } from './adapters/node.ts'
 
@@ -43,6 +43,7 @@ export type {
   HandlerRequest,
   HandlerResult,
   HeadersInit,
+  IndexedMediaType,
   IndexedOperation,
   Middleware,
   OperationInfo,

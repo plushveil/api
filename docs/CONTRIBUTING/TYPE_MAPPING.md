@@ -31,32 +31,33 @@ examples in these documents are already written in it.
 
 ### Supported Types
 
-| TypeScript                  | JSON Schema                                                    | Notes                                                               |
-| --------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `string`                    | `{ "type": "string" }`                                         |                                                                     |
-| `number`                    | `{ "type": "number" }`                                         |                                                                     |
-| `bigint`                    | `{ "type": "integer" }`                                        |                                                                     |
-| `boolean`                   | `{ "type": "boolean" }`                                        |                                                                     |
-| `null`                      | `{ "type": "null" }`                                           |                                                                     |
-| `'a'`                       | `{ "const": "a" }`                                             | Any string, number, or boolean literal.                             |
-| `'a' \| 'b'`                | `{ "type": "string", "enum": ["a", "b"] }`                     | A union of same-typed literals collapses to `enum`.                 |
-| `A \| B`                    | `{ "oneOf": [...] }`                                           | A union of mixed types.                                             |
-| `A & B`                     | `{ "allOf": [...] }`                                           |                                                                     |
-| `T[]`                       | `{ "type": "array", "items": … }`                              |                                                                     |
-| `[A, B]`                    | `{ "type": "array", "prefixItems": [...], "items": false }`    | A fixed tuple.                                                      |
-| `[A, ...B[]]`               | `{ "type": "array", "prefixItems": [...], "items": … }`        | A variadic tuple.                                                   |
-| `interface` / `type` object | `{ "type": "object", "properties": …, "required": [...] }`     | `additionalProperties: false` unless an index signature is present. |
-| `prop?: T`                  | Omitted from `required`                                        |                                                                     |
-| `readonly prop: T`          | `{ "readOnly": true }`                                         |                                                                     |
-| `Record<string, T>`         | `{ "type": "object", "additionalProperties": … }`              | Also `{ [k: string]: T }`.                                          |
-| `Record<'a' \| 'b', T>`     | `{ "properties": { "a": …, "b": … }, "required": ["a", "b"] }` | A finite key union expands.                                         |
-| `unknown` / `any`           | `{}`                                                           |                                                                     |
-| `never`                     | _(omitted)_                                                    | No request body, or an empty response.                              |
-| `Date`                      | `{ "type": "string", "format": "date-time" }`                  | Serialised as an ISO 8601 string.                                   |
-| `Uint8Array`                | `{ "type": "string", "format": "binary" }`                     |                                                                     |
-| `T \| null`                 | `{ "type": [..., "null"] }`                                    |                                                                     |
-| A named type                | `{ "$ref": "#/components/schemas/Name" }`                      | See [API_FOLDER.md](./API_FOLDER.md).                               |
-| A recursive named type      | `$ref` back to itself                                          | Cycles are fine, because they become references.                    |
+| TypeScript                                                           | JSON Schema                                                    | Notes                                                                                                                                                       |
+| -------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `string`                                                             | `{ "type": "string" }`                                         |                                                                                                                                                             |
+| `number`                                                             | `{ "type": "number" }`                                         |                                                                                                                                                             |
+| `bigint`                                                             | `{ "type": "integer" }`                                        |                                                                                                                                                             |
+| `boolean`                                                            | `{ "type": "boolean" }`                                        |                                                                                                                                                             |
+| `null`                                                               | `{ "type": "null" }`                                           |                                                                                                                                                             |
+| `'a'`                                                                | `{ "const": "a" }`                                             | Any string, number, or boolean literal.                                                                                                                     |
+| `'a' \| 'b'`                                                         | `{ "type": "string", "enum": ["a", "b"] }`                     | A union of same-typed literals collapses to `enum`.                                                                                                         |
+| `A \| B`                                                             | `{ "oneOf": [...] }`                                           | A union of mixed types.                                                                                                                                     |
+| `A & B`                                                              | `{ "allOf": [...] }`                                           |                                                                                                                                                             |
+| `T[]`                                                                | `{ "type": "array", "items": … }`                              |                                                                                                                                                             |
+| `[A, B]`                                                             | `{ "type": "array", "prefixItems": [...], "items": false }`    | A fixed tuple.                                                                                                                                              |
+| `[A, ...B[]]`                                                        | `{ "type": "array", "prefixItems": [...], "items": … }`        | A variadic tuple.                                                                                                                                           |
+| `interface` / `type` object                                          | `{ "type": "object", "properties": …, "required": [...] }`     | `additionalProperties: false` unless an index signature is present.                                                                                         |
+| `prop?: T`                                                           | Omitted from `required`                                        |                                                                                                                                                             |
+| `readonly prop: T`                                                   | `{ "readOnly": true }`                                         |                                                                                                                                                             |
+| `Record<string, T>`                                                  | `{ "type": "object", "additionalProperties": … }`              | Also `{ [k: string]: T }`.                                                                                                                                  |
+| `Record<'a' \| 'b', T>`                                              | `{ "properties": { "a": …, "b": … }, "required": ["a", "b"] }` | A finite key union expands.                                                                                                                                 |
+| `unknown` / `any`                                                    | `{}`                                                           |                                                                                                                                                             |
+| `never`                                                              | _(omitted)_                                                    | No request body, or an empty response.                                                                                                                      |
+| `Date`                                                               | `{ "type": "string", "format": "date-time" }`                  | Serialised as an ISO 8601 string.                                                                                                                           |
+| `Uint8Array` / `ArrayBuffer` / `Blob` / `ReadableStream<Uint8Array>` | `{ "type": "string", "format": "binary" }`                     | All four describe the same wire shape; see [Media Types](./API_FOLDER.md#media-types) for how `Content<M, T>` tells a buffered payload from a streamed one. |
+| `T \| null`                                                          | `{ "type": [..., "null"] }`                                    |                                                                                                                                                             |
+| A named type                                                         | `{ "$ref": "#/components/schemas/Name" }`                      | See [API_FOLDER.md](./API_FOLDER.md).                                                                                                                       |
+| A recursive named type                                               | `$ref` back to itself                                          | Cycles are fine, because they become references.                                                                                                            |
+| `Content<M, T>`                                                      | `T`'s schema, under media type `M`                             | Declares a non-`application/json` media type. See [Media Types](./API_FOLDER.md#media-types).                                                               |
 
 Mapped and conditional types (`Pick`, `Omit`, `Partial`, `Required`, `Exclude`, and your own)
 are fully supported. They are resolved to their result before emission, so `Omit<User, 'id'>`
@@ -132,9 +133,12 @@ property. Prose after a blank line becomes `description` on an operation.
 | `@style` / `@explode`                     | `style` / `explode`       | parameters only — controls array and object serialisation |
 
 `@format` accepts any string. The values the runtime validator enforces are `date-time`,
-`date`, `time`, `duration`, `email`, `hostname`, `ipv4`, `ipv6`, `uri`, `uri-reference`,
-`uuid`, `int32`, `int64`, `float`, `double`, `byte`, `binary`, and `password`. Others are
-emitted to the spec and carried through the backport, but not checked at runtime.
+`date`, `time`, `email`, `hostname`, `ipv4`, `uri`, `uuid`, `int32`, and `int64`. Others --
+including `binary`, which every media type in [Media Types](./API_FOLDER.md#media-types)
+carries -- are emitted to the spec and carried through the backport, but not checked at
+runtime: a byte payload cannot be checked against a JSON schema regardless, buffered or
+streamed, so the server skips schema validation for it entirely rather than failing every
+request against a format it could never satisfy.
 
 ```ts
 export interface CreateUser {

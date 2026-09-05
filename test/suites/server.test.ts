@@ -220,3 +220,93 @@ await describe('createServer', async () => {
     assert.deepEqual(await good.json(), { page: 3 })
   })
 })
+
+await describe('body reading', async () => {
+  await it('parses a form-urlencoded body', async () => {
+    const router = createRouter().add('post', '/form', async ({ body }) => ({ status: 200, body }))
+    const server = createServer({ routes: router })
+    const response = await server.fetch(new Request('http://localhost/form', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: 'a=1&a=2&b=3' }))
+    assert.equal(response.status, 200)
+    assert.deepEqual(await readJson(response), { a: ['1', '2'], b: '3' })
+  })
+
+  await it('returns undefined for an empty body, not an empty string', async () => {
+    const router = createRouter().add('post', '/empty', async ({ body }) => ({ status: 200, body: { isUndefined: body === undefined } }))
+    const server = createServer({ routes: router })
+    const response = await server.fetch(new Request('http://localhost/empty', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '' }))
+    assert.deepEqual(await readJson(response), { isUndefined: true })
+  })
+
+  await it('413s a body over bodyLimit', async () => {
+    const router = createRouter().add('post', '/big', async ({ body }) => ({ status: 200, body }))
+    const server = createServer({ routes: router, bodyLimit: 10 })
+    const response = await server.fetch(new Request('http://localhost/big', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ x: 'x'.repeat(100) }) }))
+    assert.equal(response.status, 413)
+  })
+
+  await it('reads a text/plain body as a string', async () => {
+    const router = createRouter().add('post', '/text', async ({ body }) => ({ status: 200, body: { type: typeof body, value: body } }))
+    const server = createServer({ routes: router })
+    const response = await server.fetch(new Request('http://localhost/text', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'hello' }))
+    assert.deepEqual(await readJson(response), { type: 'string', value: 'hello' })
+  })
+
+  await it('buffers an undeclared binary body as Uint8Array, not corrupted UTF-8 text', async () => {
+    // A lone continuation byte is invalid UTF-8: decoding it as text would silently replace it with
+    // U+FFFD. A `Uint8Array` must round-trip the exact bytes instead.
+    const bytes = new Uint8Array([0xff, 0xfe, 0x00, 0x80])
+    const router = createRouter().add('post', '/bytes', async ({ body }) => ({ status: 200, body: { bytes: body instanceof Uint8Array ? Array.from(body) : null } }))
+    const server = createServer({ routes: router })
+    const response = await server.fetch(new Request('http://localhost/bytes', { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: bytes }))
+    assert.deepEqual(await readJson(response), { bytes: Array.from(bytes) })
+  })
+
+  await it('hands a declared streaming body to the handler as a ReadableStream, unbuffered', async () => {
+    const spec = {
+      openapi: '3.1.0',
+      info: { title: 'T', version: '1' },
+      paths: {
+        '/upload': {
+          put: {
+            requestBody: { required: true, content: { 'application/octet-stream': { schema: { type: 'string' as const, format: 'binary' }, 'x-stream': true } } },
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    }
+    const router = createRouter().add('put', '/upload', async ({ body }) => {
+      if (!(body instanceof ReadableStream)) return { status: 500, body: { error: 'not a stream' } }
+      let total = 0
+      const reader = body.getReader()
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+      }
+      return { status: 200, body: { total } }
+    })
+    const server = createServer({ routes: router, spec, validate: true })
+    const response = await server.fetch(new Request('http://localhost/upload', { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: new Uint8Array(1024) }))
+    assert.equal(response.status, 200)
+    assert.deepEqual(await readJson(response), { total: 1024 })
+  })
+
+  await it('415s a body whose content-type the operation does not declare', async () => {
+    const spec = {
+      openapi: '3.1.0',
+      info: { title: 'T', version: '1' },
+      paths: {
+        '/typed': {
+          post: {
+            requestBody: { required: true, content: { 'application/json': { schema: { type: 'object' as const } } } },
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    }
+    const router = createRouter().add('post', '/typed', async ({ body }) => ({ status: 200, body }))
+    const server = createServer({ routes: router, spec, validate: true })
+    const response = await server.fetch(new Request('http://localhost/typed', { method: 'POST', headers: { 'content-type': 'text/csv' }, body: 'a,b\n1,2' }))
+    assert.equal(response.status, 415)
+  })
+})

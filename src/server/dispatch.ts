@@ -6,7 +6,7 @@ import { finalize } from './finalize.ts'
 import { MalformedPathError } from './route-path.ts'
 import { applyResult } from './router.ts'
 import type { Context, Router, Runtime } from './types.ts'
-import { validateRequest, validateResponse } from './validate.ts'
+import { findOperation, validateRequest, validateResponse } from './validate.ts'
 
 /**
  * Runs one request through server middleware, validation, the router, and finalisation.
@@ -21,8 +21,15 @@ export async function dispatch(runtime: Runtime, router: Router, context: Contex
     await run(runtime.middleware, context, async () => {
       try {
         if (context.request.body === undefined) {
-          // Nothing has read the body yet; do it before validation needs it.
-          context.request.body = await readBody(request, runtime.options.bodyLimit ?? 1_048_576)
+          // Nothing has read the body yet; do it before validation needs it. Matched here, ahead of
+          // `router.handle`, so the operation the spec declares for this route -- if any -- is known
+          // before the read decides whether the content type is binary and whether it should be
+          // buffered or handed to the handler as a stream. `router.handle` re-matches for its own
+          // bookkeeping; a second linear scan is cheap at the route counts an `api/` folder produces
+          // (see the note on `router.ts`'s `match`).
+          const matched = router.match(context.request.method, context.request.url.pathname)
+          const operation = matched ? findOperation(runtime, matched.route.method, matched.route.path) : undefined
+          context.request.body = await readBody(request, operation, runtime.body.limit)
         }
         await router.handle(context, {
           beforeHandler: document ? (matched) => validateRequest(runtime, matched, document) : undefined,

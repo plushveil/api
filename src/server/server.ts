@@ -45,6 +45,7 @@ export function createServer(options: ServerOptions = {}): Server {
     middleware: [...(options.middleware ?? [])],
     onError: options.onError ?? defaultOnError,
     notFound: options.notFound ?? NOT_FOUND,
+    body: { limit: options.bodyLimit ?? 1_048_576 },
   }
 
   let router: Router = typeof options.routes === 'string' || options.routes === undefined ? createRouter() : options.routes

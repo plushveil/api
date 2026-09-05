@@ -52,7 +52,21 @@ type CookiePart<Op> = 'cookies' extends keyof Op ? ([RequiredKeysOf<Op['cookies'
 
 type HeaderPart<Op> = 'headers' extends keyof Op ? ([RequiredKeysOf<Op['headers']>] extends [never] ? { headers?: HeaderValues & Op['headers'] } : { headers: HeaderValues & Op['headers'] }) : { headers?: HeaderValues }
 
-type BodyPart<Op> = 'body' extends keyof Op ? ([Op['body']] extends [never] ? { body?: undefined } : { body: Op['body'] }) : { body?: undefined }
+/**
+ * Unwraps `@plushveil/api/server`'s `Content<M, T>` to the payload a caller actually supplies or
+ * reads. Matched structurally, rather than importing `Content` itself, so this package stays
+ * independent of the server package the way `OperationShape` above already is.
+ */
+type ClientPayload<T> = T extends { readonly mediaType: string; readonly body: infer B } ? B : T
+
+/**
+ * A declared buffered-or-streamed byte body also accepts a `Blob`/`File`: the browser value a
+ * `<input type="file">` or a drag-and-drop hands you, without reading it into memory first to
+ * produce the exact type the operation declares.
+ */
+type WidenBody<T> = T extends Uint8Array | ArrayBuffer | ReadableStream<Uint8Array> ? T | Blob | File : T
+
+type BodyPart<Op> = 'body' extends keyof Op ? ([Op['body']] extends [never] ? { body?: undefined } : { body: WidenBody<ClientPayload<Op['body']>> }) : { body?: undefined }
 
 /**
  * Options that never come from the operation.
@@ -72,9 +86,11 @@ export type RequestOptions<Op> = PathPart<Op> & QueryPart<Op> & HeaderPart<Op> &
 export type RequestArgs<Op> = [RequiredKeysOf<RequestOptions<Op>>] extends [never] ? [options?: RequestOptions<Op>] : [options: RequestOptions<Op>]
 
 /**
- * A response body typed `never` in the spec means there is no body.
+ * A response body typed `never` in the spec means there is no body. Unwrapped through
+ * `ClientPayload` for the same reason `BodyPart` is: `parseBody` in `client.ts` resolves to the
+ * payload a `Content<M, T>` response declares, not the wrapper.
  */
-export type BodyAt<R, S extends keyof R> = [R[S]] extends [never] ? undefined : R[S]
+export type BodyAt<R, S extends keyof R> = [R[S]] extends [never] ? undefined : ClientPayload<R[S]>
 
 export interface ApiResponse<S, B> {
   status: S

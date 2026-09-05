@@ -78,6 +78,7 @@ function nameOf(type: Type): string | undefined {
   if (!name || name.startsWith('__')) return undefined
   // Builtins are mapped by value, never registered.
   if (name === 'Date' || name === 'Array' || name === 'Uint8Array' || name === 'Record') return undefined
+  if (name === 'ArrayBuffer' || name === 'Blob' || name === 'ReadableStream') return undefined
   return name
 }
 
@@ -157,7 +158,13 @@ function intrinsicSchema(context: WalkContext, type: Type, location: string): Sc
 
   const symbol = type.getSymbol()
   if (symbol?.name === 'Date') return { type: 'string', format: 'date-time' }
-  if (symbol?.name === 'Uint8Array') return { type: 'string', format: 'binary' }
+  // A raw byte payload, however it is held in memory. `Uint8Array`/`ArrayBuffer`/`Blob` are
+  // buffered; `ReadableStream` is not -- but the schema cannot tell them apart, since all four
+  // describe the same wire shape. The distinction is carried one level up, on the media type
+  // object's `x-stream` flag (see `contentMapFor` in extract.ts), not here.
+  if (symbol?.name === 'Uint8Array' || symbol?.name === 'ArrayBuffer' || symbol?.name === 'Blob' || symbol?.name === 'ReadableStream') {
+    return { type: 'string', format: 'binary' }
+  }
 
   return undefined
 }

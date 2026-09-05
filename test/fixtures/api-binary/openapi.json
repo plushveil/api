@@ -1,0 +1,70 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "@plushveil/api",
+    "version": "0.0.1"
+  },
+  "paths": {
+    "/export": {
+      "get": {
+        "operationId": "exportReport",
+        "summary": "Export a report, as a PDF or a CSV depending on `format`.",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["csv", "pdf"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/upload": {
+      "put": {
+        "operationId": "uploadFile",
+        "summary": "Upload a file's bytes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              },
+              "x-stream": true
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Accepted"
+          }
+        }
+      }
+    }
+  }
+}

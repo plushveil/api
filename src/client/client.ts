@@ -82,7 +82,16 @@ function serializeCookies(cookies: Record<string, unknown> | undefined): string 
 
 function defaultBodySerializer(body: unknown): { body: BodyInit; contentType?: string } {
   if (typeof body === 'string') return { body, contentType: 'text/plain; charset=utf-8' }
-  if (body instanceof Uint8Array || body instanceof ArrayBuffer || body instanceof ReadableStream || body instanceof FormData || body instanceof URLSearchParams) {
+  if (body instanceof Uint8Array || body instanceof ArrayBuffer || body instanceof ReadableStream) {
+    // Raw bytes carry no type of their own, unlike the three below -- `Request` would send them
+    // with no `content-type` at all otherwise.
+    return { body: body as BodyInit, contentType: 'application/octet-stream' }
+  }
+  if (body instanceof Blob || body instanceof FormData || body instanceof URLSearchParams) {
+    // Each already carries its own content type -- a `Blob`'s `type` (so a `File` keeps the type
+    // the browser gave it), `FormData`'s multipart boundary, `URLSearchParams`'s form encoding --
+    // which `Request` derives when no header is set already. Setting one here would only risk
+    // overriding it with something less accurate.
     return { body: body as BodyInit }
   }
   return { body: JSON.stringify(body), contentType: 'application/json' }

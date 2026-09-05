@@ -8,7 +8,7 @@
 import { STATUS_CODES } from 'node:http'
 import { relative } from 'node:path'
 import type { Symbol as TsSymbol, Type } from 'typescript/unstable/sync'
-import { compareCodePoints, type Document, type OperationObject, type ParameterLocation, type ParameterObject, type ResponseObject, type Schema } from '../openapi/main.ts'
+import { compareCodePoints, type Document, type MediaTypeObject, type OperationObject, type ParameterLocation, type ParameterObject, type ResponseObject, type Schema } from '../openapi/main.ts'
 import { discoverRoutes, patternToPath } from '../server/main.ts'
 import { createHost, type Host } from './host.ts'
 import { readDoc, words } from './jsdoc.ts'
@@ -99,6 +99,45 @@ export async function extractRoutes(dir: string, options: ExtractOptions = {}): 
   }
 }
 
+/**
+ * True when `type` is the generic instantiation of the named builtin or the server's `Content`.
+ */
+function isNamedReference(type: Type, name: string): boolean {
+  return type.isTypeReference() && type.getSymbol()?.name === name
+}
+
+/**
+ * One `Content<M, T>` member, resolved to its media type and schema.
+ */
+function contentEntry(context: WalkContext, type: Type, file: string): { mediaType: string; schema: Schema; stream: boolean } {
+  if (!type.isTypeReference()) throw new UnsupportedTypeError('Content<M, T> requires two type arguments', file)
+  const [mediaTypeArg, payloadArg] = context.checker.getTypeArguments(type)
+  if (!mediaTypeArg?.isStringLiteralType()) throw new UnsupportedTypeError("Content<M, T>'s media type must be a string literal", file)
+  if (!payloadArg) throw new UnsupportedTypeError('Content<M, T> requires a payload type', file)
+  return { mediaType: mediaTypeArg.value, schema: typeToSchema(context, payloadArg, file), stream: isNamedReference(payloadArg, 'ReadableStream') }
+}
+
+/**
+ * Builds a `requestBody`/response `content` map from a body or status type.
+ *
+ * A bare type (or a union with no `Content` member) keeps defaulting to `application/json`, as it
+ * always has. A single `Content<M, T>`, or a union where every member is a `Content<M, T>` (one
+ * declared media type per status per docs/CONTRIBUTING/API_FOLDER.md#media-types), produces one
+ * entry per media type instead.
+ */
+function contentMapFor(context: WalkContext, type: Type, file: string): Record<string, MediaTypeObject> {
+  const members = type.isUnionType() ? type.getTypes() : [type]
+  if (members.every((member) => isNamedReference(member, 'Content'))) {
+    const content: Record<string, MediaTypeObject> = {}
+    for (const member of members) {
+      const entry = contentEntry(context, member, file)
+      content[entry.mediaType] = entry.stream ? { schema: entry.schema, 'x-stream': true } : { schema: entry.schema }
+    }
+    return content
+  }
+  return { 'application/json': { schema: typeToSchema(context, type, file) } }
+}
+
 function buildOperation(context: WalkContext, type: Type, symbol: TsSymbol, file: string): OperationObject {
   const doc = readDoc(context.checker, symbol)
   const members = new Map(context.checker.getPropertiesOfType(type).map((s) => [s.name, s]))
@@ -149,7 +188,7 @@ function buildOperation(context: WalkContext, type: Type, symbol: TsSymbol, file
     if (!isNever) {
       operation.requestBody = {
         required: (bodySymbol.flags & (1 << 24)) === 0,
-        content: { 'application/json': { schema: typeToSchema(context, bodyType, file) } },
+        content: contentMapFor(context, bodyType, file),
       }
     }
   }
@@ -174,10 +213,7 @@ function buildResponses(context: WalkContext, symbol: TsSymbol, file: string): R
     // phrase. The emitter must not turn that default back into an `@description` tag, or the round
     // trip would accrete one on every pass.
     const response: ResponseObject = { description: doc.tags.description?.[0] ?? doc.summary ?? reason }
-    if (!empty) {
-      const schema: Schema = typeToSchema(context, statusType, file)
-      response.content = { 'application/json': { schema } }
-    }
+    if (!empty) response.content = contentMapFor(context, statusType, file)
     responses[status.name] = response
   }
 

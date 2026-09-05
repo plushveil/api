@@ -35,6 +35,19 @@ export class ValidationError extends HttpError {
 }
 
 /**
+ * A request body sent with a `content-type` the matched operation does not declare.
+ */
+export class UnsupportedMediaTypeError extends HttpError {
+  constructor(contentType: string, accepted: readonly string[]) {
+    super(415, {
+      error: 'unsupported_media_type',
+      message: `${contentType || '(no content-type)'} is not one of the media types this operation accepts: ${accepted.length > 0 ? accepted.join(', ') : 'none'}.`,
+    })
+    this.name = 'UnsupportedMediaTypeError'
+  }
+}
+
+/**
  * A response that does not match the specification.
  */
 export class ResponseValidationError extends HttpError {

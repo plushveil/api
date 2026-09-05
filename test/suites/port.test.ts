@@ -147,3 +147,50 @@ await describe('api-backport', async () => {
     assert.match(await readFile(join(dir, 'api/schemas.ts'), 'utf8'), /export interface HealthStatus/)
   })
 })
+
+const BINARY_FIXTURE = join(root, 'test/fixtures/api-binary')
+
+/**
+ * `Content<M, T>` -- binary and streaming media types -- round-tripped through the real CLIs, the
+ * same promise `describe('api-backport')` above checks for JSON-only operations. Regenerate this
+ * fixture's `openapi.json`/`api.types.ts` with:
+ *
+ * ```bash
+ * node bin/port.ts test/fixtures/api-binary/api --out test/fixtures/api-binary/openapi.json \
+ *   --types test/fixtures/api-binary/api.types.ts --title '@plushveil/api' --api-version 0.0.1
+ * ```
+ */
+await describe('api-port and api-backport, for Content<M, T>', async () => {
+  await it('extracts a declared media type, a streaming flag, and a Content union from real source', async () => {
+    const dir = await workspace()
+    const out = join(dir, 'openapi.json')
+
+    const result = await run(PORT, [join(BINARY_FIXTURE, 'api'), '--out', out, '--no-types', '--title', '@plushveil/api', '--api-version', '0.0.1'])
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(await readFile(out, 'utf8'), await readFile(join(BINARY_FIXTURE, 'openapi.json'), 'utf8'))
+  })
+
+  await it('emits Content<M, T> and ReadableStream<Uint8Array> from the committed specification', async () => {
+    const dir = await workspace()
+    const types = join(dir, 'api.types.ts')
+
+    const result = await run(PORT, [join(BINARY_FIXTURE, 'api'), '--out', join(dir, 'openapi.json'), '--types', types, '--title', '@plushveil/api', '--api-version', '0.0.1'])
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(await readFile(types, 'utf8'), await readFile(join(BINARY_FIXTURE, 'api.types.ts'), 'utf8'))
+  })
+
+  await it('round-trips through generated route modules without changing the specification', async () => {
+    const dir = await workspace()
+    const original = await readFile(join(BINARY_FIXTURE, 'openapi.json'), 'utf8')
+
+    const back = await run(BACKPORT, [join(BINARY_FIXTURE, 'openapi.json'), '--out', join(dir, 'api'), '--types', join(dir, 'api.types.ts')])
+    assert.equal(back.code, 0, back.stderr)
+
+    // The generated route modules live outside this repo's own tsconfig `include`, so the project
+    // has to be pointed at the workspace explicitly here -- unlike the JSON-only round trip above,
+    // whose fixture sits inside this repo and resolves against its default project.
+    const again = await run(PORT, ['./api', '--out', './reported.json', '--no-types', '--title', '@plushveil/api', '--api-version', '0.0.1', '--project', './tsconfig.json'], { cwd: dir })
+    assert.equal(again.code, 0, again.stderr)
+    assert.equal(await readFile(join(dir, 'reported.json'), 'utf8'), original)
+  })
+})

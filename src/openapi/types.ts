@@ -28,6 +28,13 @@ export interface ParameterObject {
 
 export interface MediaTypeObject {
   schema?: Schema
+  /**
+   * Marks a binary media type whose body a handler receives as a `ReadableStream<Uint8Array>`
+   * rather than a buffered `Uint8Array`. Round-trips through `Content<M, ReadableStream<Uint8Array>>`
+   * so the TypeScript side can tell "buffered" and "streamed" apart -- both describe the same
+   * `{ type: 'string', format: 'binary' }` schema, so the schema alone cannot.
+   */
+  'x-stream'?: boolean
 }
 
 export interface RequestBodyObject {

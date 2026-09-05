@@ -109,16 +109,16 @@ operation's `style` and `explode` (see [TYPE_MAPPING.md](./TYPE_MAPPING.md)), de
 
 ### Per-request options
 
-| Option    | Type                                | Description                                    |
-| --------- | ----------------------------------- | ---------------------------------------------- |
-| `path`    | from the operation                  | Path parameters.                               |
-| `query`   | from the operation                  | Query parameters.                              |
-| `headers` | from the operation, plus any string | Merged over the client's headers.              |
-| `cookies` | from the operation                  | Cookie parameters, serialised into `cookie`.   |
-| `body`    | from the operation                  | Serialised per the operation's media type.     |
-| `signal`  | `AbortSignal`                       | Cancellation.                                  |
-| `timeout` | `number`                            | Overrides the client timeout for this request. |
-| `fetch`   | `typeof fetch`                      | Overrides the implementation for this request. |
+| Option    | Type                                               | Description                                                                                                                             |
+| --------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `path`    | from the operation                                 | Path parameters.                                                                                                                        |
+| `query`   | from the operation                                 | Query parameters.                                                                                                                       |
+| `headers` | from the operation, plus any string                | Merged over the client's headers.                                                                                                       |
+| `cookies` | from the operation                                 | Cookie parameters, serialised into `cookie`.                                                                                            |
+| `body`    | from the operation, unwrapped from `Content<M, T>` | Serialised per the operation's media type. A `Uint8Array`/`ArrayBuffer`/`ReadableStream<Uint8Array>` body also accepts a `Blob`/`File`. |
+| `signal`  | `AbortSignal`                                      | Cancellation.                                                                                                                           |
+| `timeout` | `number`                                           | Overrides the client timeout for this request.                                                                                          |
+| `fetch`   | `typeof fetch`                                     | Overrides the implementation for this request.                                                                                          |
 
 A key is required only when the operation declares it and it has required members; an operation
 that declares none of `path`, `query`, `cookies`, or `body` takes no second argument at all.
@@ -137,13 +137,13 @@ if (result.status === 200) {
 }
 ```
 
-| Member     | Type               | Description                                                        |
-| ---------- | ------------------ | ------------------------------------------------------------------ |
-| `status`   | a declared status  | A union of the operation's declared status literals, not `number`. |
-| `body`     | from the operation | Parsed per the response content type.                              |
-| `headers`  | `Headers`          | Response headers.                                                  |
-| `response` | `Response`         | The underlying response, unread.                                   |
-| `ok`       | `boolean`          | `true` for 2xx.                                                    |
+| Member     | Type                                               | Description                                                                                        |
+| ---------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `status`   | a declared status                                  | A union of the operation's declared status literals, not `number`.                                 |
+| `body`     | from the operation, unwrapped from `Content<M, T>` | Parsed per the response content type: JSON, `text/*` as a string, anything else as a `Uint8Array`. |
+| `headers`  | `Headers`                                          | Response headers.                                                                                  |
+| `response` | `Response`                                         | The underlying response, unread.                                                                   |
+| `ok`       | `boolean`                                          | `true` for 2xx.                                                                                    |
 
 `status` is a union of exactly the declared literals, so `switch` over it is exhaustive and a
 typo like `result.status === 201` on an operation that never returns `201` is a type error.
@@ -190,16 +190,16 @@ registration order, outermost first, and may retry by calling `next` more than o
 
 ## Options
 
-| Option            | Type                                                       | Default        | Description                                                                |
-| ----------------- | ---------------------------------------------------------- | -------------- | -------------------------------------------------------------------------- |
-| `baseUrl`         | `string`                                                   | required       | Prepended to every path. A trailing slash is normalised away.              |
-| `headers`         | `HeadersInit \| () => HeadersInit \| Promise<HeadersInit>` | `{}`           | Default headers. A function is called per request, for tokens that expire. |
-| `fetch`           | `typeof fetch`                                             | global `fetch` | The implementation to use.                                                 |
-| `middleware`      | `ClientMiddleware[]`                                       | `[]`           | Registered before any `use` call.                                          |
-| `timeout`         | `number`                                                   | —              | Milliseconds before the request aborts.                                    |
-| `throwOnError`    | `boolean`                                                  | `false`        | See above.                                                                 |
-| `querySerializer` | `(query) => string`                                        | built-in       | Replaces query serialisation entirely.                                     |
-| `bodySerializer`  | `(body, mediaType) => BodyInit`                            | built-in       | Replaces body serialisation entirely.                                      |
+| Option            | Type                                                       | Default        | Description                                                                                                                                                                                                                                                                                                           |
+| ----------------- | ---------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `baseUrl`         | `string`                                                   | required       | Prepended to every path. A trailing slash is normalised away.                                                                                                                                                                                                                                                         |
+| `headers`         | `HeadersInit \| () => HeadersInit \| Promise<HeadersInit>` | `{}`           | Default headers. A function is called per request, for tokens that expire.                                                                                                                                                                                                                                            |
+| `fetch`           | `typeof fetch`                                             | global `fetch` | The implementation to use.                                                                                                                                                                                                                                                                                            |
+| `middleware`      | `ClientMiddleware[]`                                       | `[]`           | Registered before any `use` call.                                                                                                                                                                                                                                                                                     |
+| `timeout`         | `number`                                                   | —              | Milliseconds before the request aborts.                                                                                                                                                                                                                                                                               |
+| `throwOnError`    | `boolean`                                                  | `false`        | See above.                                                                                                                                                                                                                                                                                                            |
+| `querySerializer` | `(query) => string`                                        | built-in       | Replaces query serialisation entirely.                                                                                                                                                                                                                                                                                |
+| `bodySerializer`  | `(body) => { body: BodyInit; contentType?: string }`       | built-in       | Replaces body serialisation entirely. The built-in passes `Uint8Array`, `ArrayBuffer`, `ReadableStream`, `Blob`, `FormData`, and `URLSearchParams` through untouched, defaulting `content-type` to `application/octet-stream` for the first three (the other three already carry their own); everything else is JSON. |
 
 ## Errors
 
