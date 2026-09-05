@@ -104,6 +104,56 @@ await describe('api-port', async () => {
     assert.equal(result.code, 1)
     assert.match(result.stderr, /does not typecheck/)
   })
+
+  await it('does not treat one shared schema type imported into two route files as a naming collision', async () => {
+    const dir = await workspace()
+    await mkdir(join(dir, 'api/one'), { recursive: true })
+    await mkdir(join(dir, 'api/two'), { recursive: true })
+    await writeFile(join(dir, 'api/schemas.ts'), ['export interface Shared {', '  id: string', '}', ''].join('\n'), 'utf8')
+    for (const name of ['one', 'two']) {
+      await writeFile(
+        join(dir, `api/${name}/get.ts`),
+        [
+          `import type { Shared } from '../schemas.ts'`,
+          'export interface Operation {',
+          '  responses: {',
+          '    200: Shared',
+          '  }',
+          '}',
+          "export const handler = async () => ({ status: 200 as const, body: { id: 'x' } })",
+          '',
+        ].join('\n'),
+        'utf8',
+      )
+    }
+
+    const result = await run(PORT, ['./api', '--out', join(dir, 'openapi.json'), '--no-types'], { cwd: dir })
+    assert.equal(result.code, 0, result.stderr)
+  })
+
+  await it('still rejects two different route-local types that happen to share a name', async () => {
+    const dir = await workspace()
+    await mkdir(join(dir, 'api/one'), { recursive: true })
+    await mkdir(join(dir, 'api/two'), { recursive: true })
+    await writeFile(
+      join(dir, 'api/one/get.ts'),
+      ['interface Dup {', '  a: string', '}', 'export interface Operation {', '  responses: {', '    200: Dup', '  }', '}', "export const handler = async () => ({ status: 200 as const, body: { a: 'x' } })", ''].join(
+        '\n',
+      ),
+      'utf8',
+    )
+    await writeFile(
+      join(dir, 'api/two/get.ts'),
+      ['interface Dup {', '  b: string', '}', 'export interface Operation {', '  responses: {', '    200: Dup', '  }', '}', "export const handler = async () => ({ status: 200 as const, body: { b: 'x' } })", ''].join(
+        '\n',
+      ),
+      'utf8',
+    )
+
+    const result = await run(PORT, ['./api', '--out', join(dir, 'openapi.json'), '--no-types'], { cwd: dir })
+    assert.equal(result.code, 1)
+    assert.match(result.stderr, /both named "Dup"/)
+  })
 })
 
 await describe('api-backport', async () => {

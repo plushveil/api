@@ -27,14 +27,21 @@ export class UnsupportedTypeError extends Error {
 }
 
 /**
+ * Where a registered name first came from: the file, for a collision to name both sites, and the
+ * symbol's id, to tell a genuine collision (two different declarations sharing a name) from the
+ * ordinary case of one shared type imported into many route files.
+ */
+interface Origin {
+  location: string
+  symbolId: number
+}
+
+/**
  * Collects named types so they can be emitted once under `components/schemas`.
  */
 export interface Components {
   schemas: Map<string, Schema>
-  /**
-   * Where each name came from, so a collision can name both sites.
-   */
-  origins: Map<string, string>
+  origins: Map<string, Origin>
 }
 
 export function createComponents(): Components {
@@ -65,13 +72,18 @@ function isOptional(symbol: TsSymbol): boolean {
 }
 
 /**
- * The name a type should be registered under, or undefined when it is an inline literal.
+ * The name a type should be registered under, plus the id of the symbol that named it, or
+ * undefined when it is an inline literal.
  *
  * An anonymous object literal's symbol is called `__type`, so that is the discriminator. The alias
  * symbol is preferred, which is what lets `type Names = 'a' | 'b'` become a component even though
  * it is not an object type.
+ *
+ * The id, not just the name, is what a caller needs to register: a name alone can't tell a shared
+ * type imported into many route files (every use resolves to the *same* symbol id) from two
+ * unrelated declarations that happen to share a name (different ids) -- see `typeToSchema`.
  */
-function nameOf(type: Type): string | undefined {
+function namedSymbol(type: Type): { name: string; symbolId: number } | undefined {
   const symbol = type.getAliasSymbol() ?? type.getSymbol()
   if (!symbol) return undefined
   const { name } = symbol
@@ -79,7 +91,7 @@ function nameOf(type: Type): string | undefined {
   // Builtins are mapped by value, never registered.
   if (name === 'Date' || name === 'Array' || name === 'Uint8Array' || name === 'Record') return undefined
   if (name === 'ArrayBuffer' || name === 'Blob' || name === 'ReadableStream') return undefined
-  return name
+  return { name, symbolId: symbol.id }
 }
 
 /**
@@ -93,19 +105,25 @@ export function typeToSchema(context: WalkContext, type: Type, location: string)
 
   // Hoisted above the object branch on purpose, so a named non-object alias becomes a component
   // too, as API_FOLDER.md requires.
-  const name = nameOf(type)
-  if (name) {
+  const named = namedSymbol(type)
+  if (named) {
+    const { name } = named
     const ref: Schema = { $ref: `#/components/schemas/${name}` }
     if (context.components.schemas.has(name) || context.active.has(name)) {
       const origin = context.components.origins.get(name)
-      if (origin && origin !== location && !context.active.has(name)) {
-        throw new UnsupportedTypeError(`Two different types are both named ${JSON.stringify(name)} (${origin} and ${location}); rename one`, location)
+      // A genuine collision is two *different* declarations sharing a name -- their symbols have
+      // different ids. The ordinary case, one shared type (e.g. a schema imported from
+      // schemas.ts) referenced from many route files, resolves to the same symbol every time and
+      // must not trip this: `origin.location` alone can't distinguish the two, since it is a
+      // different file on every use past the first regardless of which case this is.
+      if (origin && origin.symbolId !== named.symbolId && !context.active.has(name)) {
+        throw new UnsupportedTypeError(`Two different types are both named ${JSON.stringify(name)} (${origin.location} and ${location}); rename one`, location)
       }
       return ref
     }
 
     context.active.add(name)
-    context.components.origins.set(name, location)
+    context.components.origins.set(name, { location, symbolId: named.symbolId })
     try {
       const schema = structural(context, type, location)
       const doc = readDoc(context.checker, type.getAliasSymbol() ?? type.getSymbol())
