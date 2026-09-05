@@ -190,7 +190,10 @@ export function createClient<Api extends ApiShape>(options: ClientOptions): Clie
     const signals = [input.signal, timeout === undefined ? undefined : AbortSignal.timeout(timeout)].filter((s): s is AbortSignal => s !== undefined)
     const signal = combineSignals(signals)
 
-    const request = new Request(url, { method: verb.toUpperCase(), headers, body, signal })
+    // A ReadableStream body requires `duplex: 'half'`, or the Request constructor throws --
+    // undici's requirement for any request that streams a body rather than buffering one.
+    const duplex = body instanceof ReadableStream ? 'half' : undefined
+    const request = new Request(url, { method: verb.toUpperCase(), headers, body, signal, duplex })
     const implementation = input.fetch ?? options.fetch ?? fetch
 
     // Middleware may retry, so the terminal clones rather than consuming the request it was given.

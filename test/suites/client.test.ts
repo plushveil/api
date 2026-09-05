@@ -100,6 +100,72 @@ await describe('client against the server', async () => {
   })
 })
 
+await describe('streaming bodies', async () => {
+  interface StreamApi {
+    '/upload': { put: { body: ReadableStream<Uint8Array>; responses: { 200: { total: number } } } }
+  }
+
+  await it('uploads a ReadableStream request body over a real socket', async () => {
+    // Requires `duplex: 'half'` on the underlying Request -- without it, the fetch
+    // implementation throws before the request is even sent.
+    const router = createRouter().add('put', '/upload', async (request) => {
+      if (!(request.body instanceof ReadableStream)) return { status: 500, body: { total: -1 } }
+      const reader = request.body.getReader()
+      let total = 0
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        total += value.byteLength
+      }
+      return { status: 200, body: { total } }
+    })
+    // A spec declaring x-stream is what tells the server to hand the body to the handler
+    // unbuffered, rather than trying to parse it as JSON for lack of a declared content type.
+    const spec = {
+      openapi: '3.1.0',
+      info: { title: 'T', version: '1' },
+      paths: {
+        '/upload': {
+          put: {
+            requestBody: { required: true, content: { 'application/octet-stream': { schema: { type: 'string' as const, format: 'binary' }, 'x-stream': true } } },
+            responses: { 200: { description: 'OK' } },
+          },
+        },
+      },
+    }
+    const server = createServer({ routes: router, spec, validate: true })
+    const address = await server.listen(0, '127.0.0.1')
+    try {
+      const client = createClient<StreamApi>({ baseUrl: `http://127.0.0.1:${address.port}` })
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2, 3, 4]))
+          controller.close()
+        },
+      })
+      const result = await client.put('/upload', { body: stream, headers: { 'content-type': 'application/octet-stream' } })
+      assert.equal(result.status, 200)
+      assert.deepEqual(result.body, { total: 4 })
+    } finally {
+      await server.close()
+    }
+  })
+
+  await it('resolves a binary response to a buffered Uint8Array, never a live stream', async () => {
+    interface DownloadApi {
+      '/download': { get: { responses: { 200: Uint8Array } } }
+    }
+    const router = createRouter().add('get', '/download', async () => ({ status: 200, body: new Uint8Array([9, 8, 7]) }))
+    const server = createServer({ routes: router })
+    const client = createClient<DownloadApi>({ baseUrl: 'http://localhost', fetch: through(server) })
+
+    const result = await client.get('/download')
+    assert.equal(result.status, 200)
+    assert.ok(result.body instanceof Uint8Array)
+    assert.deepEqual(Array.from(result.body), [9, 8, 7])
+  })
+})
+
 await describe('errors and middleware', async () => {
   const failing = createRouter().add('get', '/boom', async () => ({ status: 500, body: { error: 'nope' } }))
 

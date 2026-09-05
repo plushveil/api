@@ -86,11 +86,20 @@ export type RequestOptions<Op> = PathPart<Op> & QueryPart<Op> & HeaderPart<Op> &
 export type RequestArgs<Op> = [RequiredKeysOf<RequestOptions<Op>>] extends [never] ? [options?: RequestOptions<Op>] : [options: RequestOptions<Op>]
 
 /**
+ * A response body typed `ReadableStream<Uint8Array>` (a streamed `Content<M, T>`, declared so the
+ * *server* hands a handler the unbuffered request the same way) is never actually a stream on the
+ * client: `parseBody` in `client.ts` always resolves a non-JSON, non-text response to a buffered
+ * `Uint8Array` -- there is no per-call option to ask for a live stream instead. Collapsing the type
+ * to match keeps a caller from calling `.getReader()` on a value that was never one.
+ */
+type ResponsePayload<T> = ClientPayload<T> extends ReadableStream<Uint8Array> ? Uint8Array : ClientPayload<T>
+
+/**
  * A response body typed `never` in the spec means there is no body. Unwrapped through
  * `ClientPayload` for the same reason `BodyPart` is: `parseBody` in `client.ts` resolves to the
  * payload a `Content<M, T>` response declares, not the wrapper.
  */
-export type BodyAt<R, S extends keyof R> = [R[S]] extends [never] ? undefined : ClientPayload<R[S]>
+export type BodyAt<R, S extends keyof R> = [R[S]] extends [never] ? undefined : ResponsePayload<R[S]>
 
 export interface ApiResponse<S, B> {
   status: S
